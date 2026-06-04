@@ -1,0 +1,40 @@
+# Virtual Environments
+venv/
+.venv/
+env/
+backend/venv/
+
+# Dependency directories
+node_modules/
+frontend/node_modules/
+
+# Build outputs
+dist/
+frontend/dist/
+build/
+
+# Local configuration and environment files
+.env
+backend/.env
+*.local
+
+# Testing caches
+.pytest_cache/
+.pytest_cache*
+.coverage
+htmlcov/
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Project Uploads (Receipts and user documents)
+backend/uploads/comprovantes/*
+!backend/uploads/comprovantes/.gitkeep
+uploads/
