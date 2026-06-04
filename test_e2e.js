@@ -1,5 +1,15 @@
 const puppeteer = require('puppeteer');
 
+async function typeSecure(page, selector, text) {
+  await page.waitForSelector(selector, { timeout: 5000 });
+  await page.focus(selector);
+  await page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    if (el) el.value = '';
+  }, selector);
+  await page.type(selector, text, { delay: 20 });
+}
+
 (async () => {
   console.log('=== Iniciando Teste E2E do Sistema Claudio ===');
   
@@ -22,13 +32,6 @@ const puppeteer = require('puppeteer');
   const page = await browser.newPage();
   await page.setViewport({ width: 1280, height: 800 });
 
-  // Logs de depuração de rede e console
-  page.on('console', msg => console.log('PAGE LOG:', msg.text()));
-  page.on('pageerror', err => console.log('PAGE ERROR:', err.message));
-  page.on('requestfailed', req => {
-    console.log('REQUEST FAILED:', req.url(), req.failure()?.errorText);
-  });
-
   const targetUrl = 'http://2.25.170.196/';
 
   try {
@@ -48,11 +51,9 @@ const puppeteer = require('puppeteer');
     }
     await new Promise(resolve => setTimeout(resolve, 3000));
 
-
     console.log('✍️ Preenchendo credenciais do cliente...');
-    await page.waitForSelector('#email', { timeout: 5000 });
-    await page.type('#email', 'cliente@alpha.com.br');
-    await page.type('#password', 'cliente123');
+    await typeSecure(page, '#email', 'cliente@alpha.com.br');
+    await typeSecure(page, '#password', 'cliente123');
 
     console.log('🔘 Clicando no botão de login...');
     await page.click('button[type="submit"]');
@@ -75,22 +76,21 @@ const puppeteer = require('puppeteer');
     console.log('💾 Screenshot salvo como "test_client_checklist.png"!');
 
     // Faz logout para testar próximo perfil
-    console.log('🚪 Fazendo logout do cliente...');
-    const buttons = await page.$$('button');
-    for (const btn of buttons) {
-      const text = await page.evaluate(el => el.innerText, btn);
-      if (text.includes('Sair')) {
-        await btn.click();
-        break;
-      }
-    }
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    console.log('🚪 Fazendo logout programático (limpando localStorage)...');
+    await page.evaluate(() => {
+      localStorage.clear();
+      sessionStorage.clear();
+    });
+    await page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
+    await new Promise(resolve => setTimeout(resolve, 3000));
 
+    // ----------------------------------------------------
+    // TESTE 2: Consultor (roberto@consultoria.com.br)
+    // ----------------------------------------------------
     console.log('\n--- Teste 2: Login do Consultor (Roberto) ---');
     console.log('✍️ Preenchendo credenciais do consultor...');
-    await page.waitForSelector('#email', { timeout: 5000 });
-    await page.type('#email', 'roberto@consultoria.com.br');
-    await page.type('#password', 'roberto123');
+    await typeSecure(page, '#email', 'roberto@consultoria.com.br');
+    await typeSecure(page, '#password', 'roberto123');
 
     console.log('🔘 Clicando no botão de login...');
     await page.click('button[type="submit"]');
@@ -109,16 +109,14 @@ const puppeteer = require('puppeteer');
     await page.screenshot({ path: 'test_consultor_dashboard.png' });
     console.log('💾 Screenshot salvo como "test_consultor_dashboard.png"!');
 
-    console.log('🚪 Fazendo logout do consultor...');
-    const buttonsConsultor = await page.$$('button');
-    for (const btn of buttonsConsultor) {
-      const text = await page.evaluate(el => el.innerText, btn);
-      if (text.includes('Sair')) {
-        await btn.click();
-        break;
-      }
-    }
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // Faz logout para limpar a sessão no final
+    console.log('🚪 Fazendo logout final...');
+    await page.evaluate(() => {
+      localStorage.clear();
+      sessionStorage.clear();
+    });
+    await page.goto(targetUrl, { waitUntil: 'domcontentloaded' });
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
     console.log('==========================================================');
     console.log('✅ TODOS OS TESTES E2E FORAM EXECUTADOS COM SUCESSO!');

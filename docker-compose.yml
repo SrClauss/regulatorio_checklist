@@ -38,10 +38,14 @@ services:
     restart: always
     ports:
       - "80:80"
+      - "443:443"
     depends_on:
       - backend
     volumes:
       - uploads_data:/usr/share/nginx/html/uploads
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /var/www/certbot:/var/www/certbot:ro
+
 
 volumes:
   mongo_data:
