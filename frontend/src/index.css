@@ -1,0 +1,245 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+  /* Cores Base */
+  --bg-gradient: linear-gradient(135deg, #f0f4f9 0%, #e1e7f0 50%, #d4def1 100%);
+  --glass-bg: rgba(255, 255, 255, 0.42);
+  --glass-bg-hover: rgba(255, 255, 255, 0.65);
+  --glass-bg-solid: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(255, 255, 255, 0.35);
+  --glass-border-active: rgba(37, 99, 235, 0.4);
+  
+  /* Cores Temáticas */
+  --primary: #2563eb;       /* Azul Royal */
+  --primary-hover: #1d4ed8;
+  --primary-light: rgba(37, 99, 235, 0.1);
+  --success: #10b981;       /* Verde Esmeralda (Concluído) */
+  --success-light: rgba(16, 185, 129, 0.1);
+  --warning: #f59e0b;       /* Âmbar (Aguardando Auditoria) */
+  --warning-light: rgba(245, 158, 11, 0.1);
+  --danger: #ef4444;        /* Vermelho Coral (Atrasado) */
+  --danger-light: rgba(239, 68, 68, 0.1);
+  
+  --text-main: #0f172a;     /* Slate 900 */
+  --text-muted: #475569;    /* Slate 600 */
+  --text-light: #64748b;    /* Slate 500 */
+  
+  /* Efeitos e Bordas */
+  --backdrop-blur: blur(20px) saturate(140%);
+  --border-radius-lg: 20px;
+  --border-radius-md: 12px;
+  --border-radius-sm: 8px;
+  
+  /* Sombras Glass */
+  --shadow-sm: 0 4px 12px 0 rgba(15, 23, 42, 0.03);
+  --shadow-md: 0 8px 32px 0 rgba(15, 23, 42, 0.06);
+  --shadow-lg: 0 12px 40px 0 rgba(15, 23, 42, 0.09);
+  
+  /* Fontes */
+  --font-heading: 'Outfit', 'Inter', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  transition: background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease, transform 0.2s ease;
+}
+
+body {
+  font-family: var(--font-body);
+  color: var(--text-main);
+  background: var(--bg-gradient);
+  background-attachment: fixed;
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  width: 100%;
+}
+
+/* Layout Principal */
+.app-container {
+  display: flex;
+  width: 100%;
+  min-height: 100vh;
+}
+
+.main-content {
+  flex: 1;
+  padding: 2.5rem;
+  margin-left: 280px; /* Largura da Sidebar */
+  overflow-y: auto;
+  max-width: calc(100% - 280px);
+}
+
+@media (max-width: 1024px) {
+  .main-content {
+    margin-left: 0;
+    max-width: 100%;
+    padding: 1.5rem;
+    padding-top: 5rem;
+  }
+}
+
+/* Utilitários Glassmorphism */
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: var(--backdrop-blur);
+  -webkit-backdrop-filter: var(--backdrop-blur);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-md);
+  border-radius: var(--border-radius-lg);
+}
+
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: var(--backdrop-blur);
+  -webkit-backdrop-filter: var(--backdrop-blur);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-sm);
+  border-radius: var(--border-radius-md);
+  padding: 1.5rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.glass-card:hover {
+  background: var(--glass-bg-hover);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+/* Formulários Glass */
+.glass-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  text-align: left;
+}
+
+.glass-label {
+  font-family: var(--font-heading);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.glass-input {
+  background: rgba(255, 255, 255, 0.3);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--border-radius-md);
+  padding: 0.75rem 1rem;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  color: var(--text-main);
+  outline: none;
+  width: 100%;
+}
+
+.glass-input:focus {
+  background: rgba(255, 255, 255, 0.6);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.glass-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  background-size: 1.25rem;
+  padding-right: 2.5rem;
+}
+
+/* Botões Glass */
+.glass-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-family: var(--font-heading);
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--border-radius-md);
+  border: 1px solid var(--glass-border);
+  cursor: pointer;
+  outline: none;
+  text-decoration: none;
+}
+
+.glass-btn-primary {
+  background: var(--primary);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.glass-btn-primary:hover {
+  background: var(--primary-hover);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+.glass-btn-secondary {
+  background: rgba(255, 255, 255, 0.35);
+  color: var(--text-main);
+}
+
+.glass-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.glass-btn-danger {
+  background: var(--danger);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.glass-btn-danger:hover {
+  background: #dc2626;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+/* Cabeçalhos */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  color: var(--text-main);
+  letter-spacing: -0.02em;
+}
+
+/* Scrollbars customizadas */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.12);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(15, 23, 42, 0.25);
+}
+
+/* Animações de Fade */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
