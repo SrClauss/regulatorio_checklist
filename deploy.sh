@@ -5,7 +5,7 @@
 SERVER_IP="2.25.170.196"
 SERVER_USER="root"
 SERVER_DEST_DIR="/app/regulatorio_checklist"
-REPO_URL="https://github.com/SrClauss/regulatorio_checklist"
+REPO_URL="git@github.com:SrClauss/regulatorio_checklist.git"
 
 echo "=========================================================="
 echo "🚀 Iniciando processo de Versionamento e Deploy de Claudio"
