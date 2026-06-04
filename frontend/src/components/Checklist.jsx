@@ -22,6 +22,7 @@ export default function Checklist({ user }) {
   // Filtros
   const [filtroEmpresa, setFiltroEmpresa] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('');
+  const [filtroPeriodicidade, setFiltroPeriodicidade] = useState('');
   
   // Seleção e Ações
   const [selectedTask, setSelectedTask] = useState(null);
@@ -165,33 +166,61 @@ export default function Checklist({ user }) {
         </div>
 
         {/* Barra de Filtros */}
-        <div style={styles.filterBar} className="glass-card">
-          {user.role !== 'cliente' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%' }}>
+          <div style={styles.filterBar} className="glass-card">
+            {user.role !== 'cliente' && (
+              <select 
+                value={filtroEmpresa} 
+                onChange={e => setFiltroEmpresa(e.target.value)} 
+                className="glass-input glass-select"
+                style={styles.filterSelect}
+              >
+                <option value="">Todas as Empresas</option>
+                {empresas.map(e => (
+                  <option key={e._id} value={e._id}>{e.nome_fantasia}</option>
+                ))}
+              </select>
+            )}
+
             <select 
-              value={filtroEmpresa} 
-              onChange={e => setFiltroEmpresa(e.target.value)} 
+              value={filtroStatus} 
+              onChange={e => setFiltroStatus(e.target.value)} 
               className="glass-input glass-select"
               style={styles.filterSelect}
             >
-              <option value="">Todas as Empresas</option>
-              {empresas.map(e => (
-                <option key={e._id} value={e._id}>{e.nome_fantasia}</option>
-              ))}
+              <option value="">Todos os Status</option>
+              <option value="Pendente">Pendentes</option>
+              <option value="Em Andamento">Em Andamento</option>
+              <option value="Aguardando Auditoria">Aguardando Auditoria</option>
+              <option value="Concluído">Concluídos</option>
             </select>
-          )}
+          </div>
 
-          <select 
-            value={filtroStatus} 
-            onChange={e => setFiltroStatus(e.target.value)} 
-            className="glass-input glass-select"
-            style={styles.filterSelect}
-          >
-            <option value="">Todos os Status</option>
-            <option value="Pendente">Pendentes</option>
-            <option value="Em Andamento">Em Andamento</option>
-            <option value="Aguardando Auditoria">Aguardando Auditoria</option>
-            <option value="Concluído">Concluídos</option>
-          </select>
+          {/* Abas de Periodicidade */}
+          <div style={styles.periodicityTabs}>
+            {[
+              { id: '', label: 'Todas as Atividades' },
+              { id: 'Diária', label: 'Diárias' },
+              { id: 'Semanal', label: 'Semanais' },
+              { id: 'Mensal', label: 'Mensais' },
+              { id: 'Outra', label: 'Outras/Únicas' }
+            ].map(tab => {
+              const isActive = filtroPeriodicidade === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setFiltroPeriodicidade(tab.id)}
+                  style={{
+                    ...styles.periodicityTab,
+                    ...(isActive ? styles.periodicityTabActive : {})
+                  }}
+                  className="glass-btn"
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </header>
 
@@ -209,20 +238,35 @@ export default function Checklist({ user }) {
             <thead>
               <tr style={styles.theadRow}>
                 <th style={styles.th}>Condicionante</th>
-                <th style={styles.th}>Empresa</th>
+                {user.role === 'cliente' ? (
+                  <th style={styles.th}>Periodicidade</th>
+                ) : (
+                  <th style={styles.th}>Empresa</th>
+                )}
                 <th style={styles.th}>Vencimento</th>
                 <th style={styles.th}>Status</th>
-                <th style={styles.th}>Responsável</th>
+                {user.role !== 'cliente' && <th style={styles.th}>Responsável</th>}
                 <th style={styles.th}>Ações</th>
               </tr>
             </thead>
             <tbody>
-              {tarefas.length === 0 ? (
-                <tr>
-                  <td colSpan="6" style={styles.emptyRow}>Nenhuma tarefa encontrada com os filtros selecionados.</td>
-                </tr>
-              ) : (
-                tarefas.map(task => {
+              {(() => {
+                const tarefasExibidas = tarefas.filter(t => {
+                  if (filtroPeriodicidade && t.periodicidade !== filtroPeriodicidade) return false;
+                  return true;
+                });
+
+                if (tarefasExibidas.length === 0) {
+                  return (
+                    <tr>
+                      <td colSpan={user.role === 'cliente' ? "5" : "6"} style={styles.emptyRow}>
+                        Nenhuma tarefa encontrada para esta visualização.
+                      </td>
+                    </tr>
+                  );
+                }
+
+                return tarefasExibidas.map(task => {
                   const isSelected = selectedTask?._id === task._id;
                   return (
                     <tr 
@@ -236,17 +280,33 @@ export default function Checklist({ user }) {
                       <td style={styles.td}>
                         <div style={styles.taskCell}>
                           <span style={styles.taskTitle}>{task.titulo}</span>
-                          <span style={styles.taskDesc}>{task.descricao?.slice(0, 50)}...</span>
+                          <span style={styles.taskDesc}>{task.descricao?.slice(0, 70)}...</span>
                         </div>
                       </td>
-                      <td style={styles.td}>{getEmpresaNome(task.empresa_id)}</td>
+                      {user.role === 'cliente' ? (
+                        <td style={styles.td}>
+                          <span style={{
+                            ...styles.statusPill,
+                            background: task.periodicidade === 'Diária' ? 'rgba(34, 197, 94, 0.1)' : 
+                                        task.periodicidade === 'Semanal' ? 'rgba(59, 130, 246, 0.1)' : 
+                                        task.periodicidade === 'Mensal' ? 'rgba(168, 85, 247, 0.1)' : 'rgba(255,255,255,0.4)',
+                            color: task.periodicidade === 'Diária' ? 'rgb(34, 197, 94)' : 
+                                   task.periodicidade === 'Semanal' ? 'rgb(59, 130, 246)' : 
+                                   task.periodicidade === 'Mensal' ? 'rgb(168, 85, 247)' : 'var(--text-muted)'
+                          }}>
+                            {task.periodicidade || 'Mensal'}
+                          </span>
+                        </td>
+                      ) : (
+                        <td style={styles.td}>{getEmpresaNome(task.empresa_id)}</td>
+                      )}
                       <td style={styles.td}>{new Date(task.data_vencimento).toLocaleDateString('pt-BR')}</td>
                       <td style={styles.td}>
                         <span style={{ ...styles.statusPill, ...getStatusStyle(task.status) }}>
                           {task.status}
                         </span>
                       </td>
-                      <td style={styles.td}>{getUsuarioNome(task.responsavel_id)}</td>
+                      {user.role !== 'cliente' && <td style={styles.td}>{getUsuarioNome(task.responsavel_id)}</td>}
                       <td style={styles.td}>
                         <button 
                           onClick={(e) => {
@@ -261,8 +321,8 @@ export default function Checklist({ user }) {
                       </td>
                     </tr>
                   );
-                })
-              )}
+                });
+              })()}
             </tbody>
           </table>
         </div>
@@ -679,5 +739,28 @@ const styles = {
     border: '4px solid var(--glass-border)',
     borderTopColor: 'var(--primary)',
     borderRadius: '50%',
+  },
+  periodicityTabs: {
+    display: 'flex',
+    gap: '0.5rem',
+    flexWrap: 'wrap',
+    padding: '0.25rem 0.5rem',
+  },
+  periodicityTab: {
+    padding: '0.45rem 1rem',
+    fontSize: '0.85rem',
+    borderRadius: '10px',
+    background: 'rgba(255, 255, 255, 0.25)',
+    border: '1px solid var(--glass-border)',
+    color: 'var(--text-muted)',
+    cursor: 'pointer',
+    fontWeight: '500',
+    transition: 'all 0.2s ease',
+  },
+  periodicityTabActive: {
+    background: 'var(--primary)',
+    color: 'white',
+    borderColor: 'var(--primary)',
+    boxShadow: 'var(--shadow-sm)',
   },
 };

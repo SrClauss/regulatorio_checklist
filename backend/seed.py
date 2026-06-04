@@ -180,6 +180,7 @@ async def run_seed():
     for cond in condicionantes:
         freq = cond["freq"]
         data_corrente = add_months(data_emissao, freq)
+        periodicidade = "Mensal" if freq == 1 else "Outra"
         
         while data_corrente <= data_vencimento:
             # Associa o responsável adequado
@@ -196,6 +197,7 @@ async def run_seed():
                 responsavel_id=resp_id,
                 data_vencimento=data_corrente,
                 valor_estimado=cond["valor"],
+                periodicidade=periodicidade,
                 historico_observacoes=[
                     HistoricoObservacao(
                         usuario_id=admin_id,
@@ -205,6 +207,42 @@ async def run_seed():
             )
             tarefas_geradas.append(nova_tarefa.model_dump(by_alias=True, exclude={"id"}))
             data_corrente = add_months(data_corrente, freq)
+            
+    # Adiciona tarefas avulsas extras (diárias e semanais) específicas para o cliente
+    data_hoje = datetime.utcnow()
+    tarefas_extras = [
+        TarefaDB(
+            documento_id=None,
+            empresa_id=empresa_id,
+            titulo="Controle Diário de Temperatura de Freezers",
+            descricao="Verificar e registrar a temperatura dos freezers de armazenamento de alimentos.",
+            tipo_id="checklist_interno",
+            cliente_executa=True,
+            status="Pendente",
+            responsavel_id=cliente_id,
+            data_vencimento=data_hoje,
+            valor_estimado=0.0,
+            periodicidade="Diária",
+            historico_observacoes=[HistoricoObservacao(usuario_id=admin_id, texto="Tarefa diária adicionada para controle interno.")]
+        ),
+        TarefaDB(
+            documento_id=None,
+            empresa_id=empresa_id,
+            titulo="Higienização de Reservatórios de Cozinha",
+            descricao="Limpeza e desinfecção semanal das caixas e reservatórios de água da cozinha principal.",
+            tipo_id="checklist_interno",
+            cliente_executa=True,
+            status="Pendente",
+            responsavel_id=cliente_id,
+            data_vencimento=data_hoje,
+            valor_estimado=0.0,
+            periodicidade="Semanal",
+            historico_observacoes=[HistoricoObservacao(usuario_id=admin_id, texto="Tarefa semanal adicionada para conformidade sanitária.")]
+        )
+    ]
+    for t_extra in tarefas_extras:
+        tarefas_geradas.append(t_extra.model_dump(by_alias=True, exclude={"id"}))
+
             
     if tarefas_geradas:
         await db.tarefas.insert_many(tarefas_geradas)

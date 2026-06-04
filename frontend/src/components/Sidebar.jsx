@@ -12,7 +12,7 @@ import {
 
 export default function Sidebar({ user, activeTab, setActiveTab, onLogout }) {
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'consultor', 'cliente'] },
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'consultor'] },
     { id: 'calendario', label: 'Calendário', icon: Calendar, roles: ['admin', 'consultor', 'cliente'] },
     { id: 'checklist', label: 'Checklist & Auditoria', icon: CheckSquare, roles: ['admin', 'consultor', 'cliente'] },
     { id: 'cadastros', label: 'Cadastros & Painel', icon: Settings, roles: ['admin'] },

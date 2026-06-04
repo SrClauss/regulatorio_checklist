@@ -21,6 +21,7 @@ class TarefaBase(BaseModel):
     valor_estimado: float = Field(default=0.0, description="Receita cobrada ao executar esta condicionante")
     data_conclusao: Optional[datetime] = None
     comprovante_url: Optional[str] = None
+    periodicidade: str = Field(default="Mensal", description="Diária, Semanal, Mensal, Outra")
     historico_observacoes: List[HistoricoObservacao] = Field(default_factory=list)
 
 class TarefaCreate(TarefaBase):
@@ -39,6 +40,7 @@ class TarefaUpdate(BaseModel):
     valor_estimado: Optional[float] = None
     data_conclusao: Optional[datetime] = None
     comprovante_url: Optional[str] = None
+    periodicidade: Optional[str] = None
     historico_observacoes: Optional[List[HistoricoObservacao]] = None
 
 class TarefaResponse(MongoBaseModel, TarefaBase):

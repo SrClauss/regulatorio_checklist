@@ -62,6 +62,7 @@ async def create_document(
                 freq = cond.get("frequencia_meses", 0)
                 
                 # Se for tarefa única (frequência 0)
+                periodicidade = "Mensal" if freq == 1 else "Outra"
                 if freq == 0:
                     nova_tarefa = TarefaDB(
                         documento_id=ObjectId(doc_id),
@@ -74,6 +75,7 @@ async def create_document(
                         responsavel_id=responsavel_cliente_id if cond.get("cliente_executa") and responsavel_cliente_id else responsavel_consultoria_id,
                         data_vencimento=data_vencimento,
                         valor_estimado=cond.get("valor_sugerido", 0.0),
+                        periodicidade=periodicidade,
                         historico_observacoes=[
                             HistoricoObservacao(
                                 usuario_id=current_user.id,
@@ -101,6 +103,7 @@ async def create_document(
                             responsavel_id=responsavel_cliente_id if cond.get("cliente_executa") and responsavel_cliente_id else responsavel_consultoria_id,
                             data_vencimento=data_corrente,
                             valor_estimado=cond.get("valor_sugerido", 0.0),
+                            periodicidade=periodicidade,
                             historico_observacoes=[
                                 HistoricoObservacao(
                                     usuario_id=current_user.id,

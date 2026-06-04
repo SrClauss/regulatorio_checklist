@@ -19,6 +19,9 @@ function App() {
         try {
           const userData = await api.getMe();
           setUser(userData);
+          if (userData.role === 'cliente') {
+            setActiveTab('checklist');
+          }
         } catch (err) {
           console.error("Token expirado ou inválido.");
           api.logout();
@@ -32,7 +35,7 @@ function App() {
 
   const handleLoginSuccess = (userData) => {
     setUser(userData);
-    setActiveTab('dashboard');
+    setActiveTab(userData.role === 'cliente' ? 'checklist' : 'dashboard');
   };
 
   const handleLogout = () => {
