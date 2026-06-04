@@ -9,7 +9,7 @@ from app.models.usuario import UsuarioDB
 router = APIRouter(prefix="/api/templates", tags=["Templates de Documentos"])
 
 # Permite acesso para admins e consultores (equipe técnica)
-allow_staff = RoleChecker(["admin", "consultor"])
+allow_staff = RoleChecker(["admin"])
 
 @router.post("", response_model=TemplateDocumentoResponse, status_code=status.HTTP_201_CREATED)
 async def create_template(template_in: TemplateDocumentoCreate, current_user: UsuarioDB = Depends(allow_staff)):

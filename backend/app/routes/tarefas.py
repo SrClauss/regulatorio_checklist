@@ -17,7 +17,7 @@ UPLOAD_DIR = "backend/uploads/comprovantes"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @router.post("", response_model=TarefaResponse, status_code=status.HTTP_201_CREATED)
-async def create_manual_task(task_in: TarefaCreate, current_user: UsuarioDB = Depends(allow_staff)):
+async def create_manual_task(task_in: TarefaCreate, current_user: UsuarioDB = Depends(RoleChecker(["admin"]))):
     """Cria uma tarefa/condicionante avulsa no sistema (Admins e Consultores)."""
     db = get_database()
     
@@ -46,11 +46,8 @@ async def list_tasks(
         # Clientes só veem tarefas de sua empresa
         query["empresa_id"] = current_user.empresa_cliente_id
     elif current_user.role == "consultor":
-        # Consultores por padrão listam tarefas sob sua alçada ou das empresas que gerenciam
-        # Mas podem buscar outras se passarem filtros específicos. 
-        # Para consistência, se não houver filtro, listamos as dele
-        if not empresa_id and not responsavel_id:
-            query["responsavel_id"] = current_user.id
+        # Consultores só veem tarefas delegadas a eles mesmos
+        query["responsavel_id"] = current_user.id
             
     # 2. Filtros Dinâmicos
     if empresa_id and current_user.role != "cliente":

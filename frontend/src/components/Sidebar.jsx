@@ -15,7 +15,7 @@ export default function Sidebar({ user, activeTab, setActiveTab, onLogout }) {
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'consultor', 'cliente'] },
     { id: 'calendario', label: 'Calendário', icon: Calendar, roles: ['admin', 'consultor', 'cliente'] },
     { id: 'checklist', label: 'Checklist & Auditoria', icon: CheckSquare, roles: ['admin', 'consultor', 'cliente'] },
-    { id: 'cadastros', label: 'Cadastros & Painel', icon: Settings, roles: ['admin', 'consultor'] },
+    { id: 'cadastros', label: 'Cadastros & Painel', icon: Settings, roles: ['admin'] },
   ];
 
   // Filtra itens de menu de acordo com a role do usuário logado

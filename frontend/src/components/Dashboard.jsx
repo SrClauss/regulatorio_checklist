@@ -23,13 +23,15 @@ export default function Dashboard({ user }) {
         const mes = now.getMonth() + 1;
         const ano = now.getFullYear();
 
-        // 1. Faturamento e Previsibilidade Mensal
-        const prevMensal = await api.getPrevisibilidadeMensal(mes, ano);
-        setFaturamentoMensal(prevMensal);
+        if (user.role === 'admin') {
+          // 1. Faturamento e Previsibilidade Mensal
+          const prevMensal = await api.getPrevisibilidadeMensal(mes, ano);
+          setFaturamentoMensal(prevMensal);
 
-        // 2. Gráfico Anual
-        const prevAnual = await api.getPrevisibilidadeAnual(ano);
-        setAnualData(prevAnual.meses || []);
+          // 2. Gráfico Anual
+          const prevAnual = await api.getPrevisibilidadeAnual(ano);
+          setAnualData(prevAnual.meses || []);
+        }
 
         // 3. Tarefas pendentes/urgentes
         const tarefas = await api.listTarefas({ status: 'Pendente' });
@@ -94,22 +96,27 @@ export default function Dashboard({ user }) {
       </header>
 
       {/* Grid de Cards de Destaque */}
-      <section style={styles.cardGrid}>
-        {/* Faturamento */}
-        <div className="glass-card" style={styles.card}>
-          <div style={{ ...styles.cardIconBg, background: 'var(--primary-light)' }}>
-            <DollarSign size={24} color="var(--primary)" />
-          </div>
-          <div style={styles.cardContent}>
-            <span style={styles.cardLabel}>Faturamento Esperado (Mês)</span>
-            <h2 style={styles.cardVal}>{formatCurrency(faturamentoMensal.receita_estimada)}</h2>
-            <div style={styles.cardDetails}>
-              <span style={{ color: 'var(--text-light)', fontSize: '0.8rem' }}>
-                Custos de Renovação: {formatCurrency(faturamentoMensal.custo_renovacoes)}
-              </span>
+      <section style={{
+        ...styles.cardGrid,
+        gridTemplateColumns: user.role === 'admin' ? 'repeat(auto-fit, minmax(300px, 1fr))' : 'repeat(auto-fit, minmax(350px, 1fr))'
+      }}>
+        {/* Faturamento (Apenas Admin) */}
+        {user.role === 'admin' && (
+          <div className="glass-card" style={styles.card}>
+            <div style={{ ...styles.cardIconBg, background: 'var(--primary-light)' }}>
+              <DollarSign size={24} color="var(--primary)" />
+            </div>
+            <div style={styles.cardContent}>
+              <span style={styles.cardLabel}>Faturamento Esperado (Mês)</span>
+              <h2 style={styles.cardVal}>{formatCurrency(faturamentoMensal.receita_estimada)}</h2>
+              <div style={styles.cardDetails}>
+                <span style={{ color: 'var(--text-light)', fontSize: '0.8rem' }}>
+                  Custos de Renovação: {formatCurrency(faturamentoMensal.custo_renovacoes)}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Condicionantes Pendentes */}
         <div className="glass-card" style={styles.card}>
@@ -145,53 +152,63 @@ export default function Dashboard({ user }) {
       </section>
 
       {/* Gráfico & Alertas Secundários */}
-      <section style={styles.mainSection}>
-        {/* Gráfico de Barras Pure CSS */}
-        <div className="glass-panel" style={styles.chartPanel}>
-          <div style={styles.panelHeader}>
-            <TrendingUp size={20} color="var(--primary)" />
-            <h3 style={styles.panelTitle}>Previsão Financeira Anual ({new Date().getFullYear()})</h3>
-          </div>
-          
-          <div style={styles.chartArea}>
-            <div style={styles.yAxis}>
-              <span>{formatCurrency(maxRevenue)}</span>
-              <span>{formatCurrency(maxRevenue / 2)}</span>
-              <span>R$ 0,00</span>
+      <section style={{
+        ...styles.mainSection,
+        gridTemplateColumns: user.role === 'admin' ? '2fr 1.25fr' : '1fr'
+      }}>
+        {/* Gráfico de Barras Pure CSS (Apenas Admin) */}
+        {user.role === 'admin' && (
+          <div className="glass-panel" style={styles.chartPanel}>
+            <div style={styles.panelHeader}>
+              <TrendingUp size={20} color="var(--primary)" />
+              <h3 style={styles.panelTitle}>Previsão Financeira Anual ({new Date().getFullYear()})</h3>
             </div>
             
-            <div style={styles.barsContainer}>
-              {anualData.map((mesData, index) => {
-                const heightPercent = Math.max((mesData.receita_estimada / maxRevenue) * 100, 4);
-                const costHeightPercent = Math.max((mesData.custo_renovacoes / maxRevenue) * 100, 4);
-                return (
-                  <div key={index} style={styles.barColumn}>
-                    <div style={styles.barGroup}>
-                      {/* Barra de Receita */}
-                      <div 
-                        style={{ ...styles.bar, height: `${heightPercent}%`, background: 'var(--primary)' }}
-                        title={`Receita: ${formatCurrency(mesData.receita_estimada)}`}
-                      ></div>
-                      {/* Barra de Custos */}
-                      <div 
-                        style={{ ...styles.bar, height: `${costHeightPercent}%`, background: 'var(--danger)' }}
-                        title={`Custos: ${formatCurrency(mesData.custo_renovacoes)}`}
-                      ></div>
+            <div style={styles.chartArea}>
+              <div style={styles.yAxis}>
+                <span>{formatCurrency(maxRevenue)}</span>
+                <span>{formatCurrency(maxRevenue / 2)}</span>
+                <span>R$ 0,00</span>
+              </div>
+              
+              <div style={styles.barsContainer}>
+                {anualData.map((mesData, index) => {
+                  const heightPercent = Math.max((mesData.receita_estimada / maxRevenue) * 100, 4);
+                  const costHeightPercent = Math.max((mesData.custo_renovacoes / maxRevenue) * 100, 4);
+                  return (
+                    <div key={index} style={styles.barColumn}>
+                      <div style={styles.barGroup}>
+                        {/* Barra de Receita */}
+                        <div 
+                          style={{ ...styles.bar, height: `${heightPercent}%`, background: 'var(--primary)' }}
+                          title={`Receita: ${formatCurrency(mesData.receita_estimada)}`}
+                        ></div>
+                        {/* Barra de Custos */}
+                        <div 
+                          style={{ ...styles.bar, height: `${costHeightPercent}%`, background: 'var(--danger)' }}
+                          title={`Custos: ${formatCurrency(mesData.custo_renovacoes)}`}
+                        ></div>
+                      </div>
+                      <span style={styles.barLabel}>{getMonthName(mesData.mes)}</span>
                     </div>
-                    <span style={styles.barLabel}>{getMonthName(mesData.mes)}</span>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
+            </div>
+            <div style={styles.chartLegend}>
+              <div style={styles.legendItem}><div style={{ ...styles.legendDot, background: 'var(--primary)' }}></div><span>Receitas Estimadas</span></div>
+              <div style={styles.legendItem}><div style={{ ...styles.legendDot, background: 'var(--danger)' }}></div><span>Custos de Renovação</span></div>
             </div>
           </div>
-          <div style={styles.chartLegend}>
-            <div style={styles.legendItem}><div style={{ ...styles.legendDot, background: 'var(--primary)' }}></div><span>Receitas Estimadas</span></div>
-            <div style={styles.legendItem}><div style={{ ...styles.legendDot, background: 'var(--danger)' }}></div><span>Custos de Renovação</span></div>
-          </div>
-        </div>
+        )}
 
         {/* Listas Rápidas de Alertas */}
-        <div style={styles.alertsPanelGroup}>
+        <div style={{
+          ...styles.alertsPanelGroup,
+          display: user.role === 'admin' ? 'flex' : 'grid',
+          gridTemplateColumns: user.role === 'admin' ? '1fr' : 'repeat(auto-fit, minmax(450px, 1fr))',
+          gap: '1.5rem'
+        }}>
           {/* Tarefas */}
           <div className="glass-panel" style={styles.listPanel}>
             <div style={styles.panelHeader}>

@@ -323,7 +323,7 @@ export default function Checklist({ user }) {
                   </div>
                 )}
 
-                {selectedTask.status === 'Aguardando Auditoria' && user.role !== 'cliente' && (
+                {selectedTask.status === 'Aguardando Auditoria' && user.role === 'admin' && (
                   <div style={styles.auditControls}>
                     <textarea
                       placeholder="Observação da auditoria (obrigatória para rejeição)..."

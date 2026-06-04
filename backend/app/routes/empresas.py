@@ -12,7 +12,7 @@ router = APIRouter(prefix="/api/empresas", tags=["Empresas"])
 allow_staff = RoleChecker(["admin", "consultor"])
 
 @router.post("", response_model=EmpresaResponse, status_code=status.HTTP_201_CREATED)
-async def create_company(company_in: EmpresaCreate, current_user: UsuarioDB = Depends(allow_staff)):
+async def create_company(company_in: EmpresaCreate, current_user: UsuarioDB = Depends(RoleChecker(["admin"]))):
     """Cadastra uma nova empresa cliente no sistema (Admins e Consultores)."""
     db = get_database()
     
@@ -84,7 +84,7 @@ async def get_company_by_id(empresa_id: str, current_user: UsuarioDB = Depends(g
     return EmpresaResponse(**company_dict)
 
 @router.put("/{empresa_id}", response_model=EmpresaResponse)
-async def update_company(empresa_id: str, company_in: EmpresaUpdate, current_user: UsuarioDB = Depends(allow_staff)):
+async def update_company(empresa_id: str, company_in: EmpresaUpdate, current_user: UsuarioDB = Depends(RoleChecker(["admin"]))):
     """Atualiza dados de uma empresa cadastrada (Admins e Consultores)."""
     db = get_database()
     

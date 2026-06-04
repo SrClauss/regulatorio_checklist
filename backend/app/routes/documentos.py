@@ -11,7 +11,7 @@ from app.models.usuario import UsuarioDB
 
 router = APIRouter(prefix="/api/documentos", tags=["Documentos Regulatórios"])
 
-allow_staff = RoleChecker(["admin", "consultor"])
+allow_staff = RoleChecker(["admin"])
 
 def add_months(sourcedate: datetime, months: int) -> datetime:
     """Função auxiliar nativa para adicionar meses a uma data sem depender de bibliotecas externas."""
