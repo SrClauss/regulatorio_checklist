@@ -27,9 +27,12 @@ fi
 # Adiciona arquivos e realiza commit das alterações
 echo "💾 Criando commit das alterações..."
 git add .
-read -p "Digite a mensagem do commit [Auto-deploy: update and docker-compose]: " COMMIT_MSG
+COMMIT_MSG="$1"
 if [ -z "$COMMIT_MSG" ]; then
-    COMMIT_MSG="Auto-deploy: update and docker-compose"
+    read -p "Digite a mensagem do commit [Auto-deploy: update and docker-compose]: " COMMIT_MSG
+    if [ -z "$COMMIT_MSG" ]; then
+        COMMIT_MSG="Auto-deploy: update and docker-compose"
+    fi
 fi
 
 git commit -m "$COMMIT_MSG"
