@@ -41,7 +41,7 @@ export const api = {
   },
 
   async getMe() {
-    const response = await fetch(`${API_BASE_URL}/api/usuarios/me`, {
+    const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
       method: 'GET',
       headers: getHeaders(),
     });
