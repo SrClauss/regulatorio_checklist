@@ -15,16 +15,15 @@ function getHeaders() {
 export const api = {
   // Autenticação
   async login(email, password) {
-    const formData = new URLSearchParams();
-    formData.append('username', email); // O OAuth2 do FastAPI espera 'username'
-    formData.append('password', password);
-
-    const response = await fetch(`${API_BASE_URL}/api/auth/token`, {
+    const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Type': 'application/json',
       },
-      body: formData.toString(),
+      body: JSON.stringify({
+        email: email,
+        senha: password
+      }),
     });
 
     if (!response.ok) {
