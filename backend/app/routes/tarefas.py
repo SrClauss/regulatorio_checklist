@@ -1,13 +1,16 @@
 import os
+import io
 from typing import List, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
+from fastapi.responses import StreamingResponse, FileResponse
 from bson import ObjectId
 from app.database import get_database
 from app.models.tarefa import TarefaCreate, TarefaResponse, TarefaUpdate, TarefaDB, HistoricoObservacao
 from app.auth.dependencies import RoleChecker, get_current_active_user
 from app.models.usuario import UsuarioDB
 from app.utils.push import send_push_notification
+from app.utils.minio_client import upload_to_minio, get_from_minio
 
 router = APIRouter(prefix="/api/tarefas", tags=["Tarefas Condicionantes"])
 
@@ -161,14 +164,16 @@ async def update_task(
     for log in logs_auditoria:
         historico.append(HistoricoObservacao(
             usuario_id=current_user.id,
-            texto=log
+            texto=log,
+            autor=current_user.nome
         ))
         
     # Adiciona observação textual opcional se fornecida pelo usuário
     if observacao:
         historico.append(HistoricoObservacao(
             usuario_id=current_user.id,
-            texto=observacao
+            texto=observacao,
+            autor=current_user.nome
         ))
         
     update_data["historico_observacoes"] = [obs.model_dump(by_alias=True) for obs in historico]
@@ -188,7 +193,8 @@ async def upload_receipt(
     current_user: UsuarioDB = Depends(get_current_active_user)
 ):
     """Faz o upload do comprovante de conclusão (PDF/imagem) e associa à tarefa,
-    alterando o status do checklist.
+    alterando o status do checklist. Armazena no MinIO, caindo de volta para o
+    armazenamento local se o MinIO estiver indisponível.
     """
     db = get_database()
     
@@ -208,14 +214,28 @@ async def upload_receipt(
             detail="Acesso não autorizado para esta tarefa"
         )
         
-    # Salva o arquivo localmente
+    # Salva o arquivo localmente ou no MinIO
     file_extension = os.path.splitext(file.filename)[1]
     safe_filename = f"comprovante_{tarefa_id}_{int(datetime.utcnow().timestamp())}{file_extension}"
-    file_path = os.path.join(UPLOAD_DIR, safe_filename)
     
-    with open(file_path, "wb") as buffer:
-        content = await file.read()
-        buffer.write(content)
+    content = await file.read()
+    file_data = io.BytesIO(content)
+    length = len(content)
+    content_type = file.content_type or "application/octet-stream"
+    
+    # Upload no MinIO
+    uploaded_to_minio = upload_to_minio(safe_filename, file_data, length, content_type)
+    
+    comprovante_key = None
+    if uploaded_to_minio:
+        comprovante_url = f"/api/tarefas/{tarefa_id}/download"
+        comprovante_key = safe_filename
+    else:
+        # Fallback local
+        file_path = os.path.join(UPLOAD_DIR, safe_filename)
+        with open(file_path, "wb") as buffer:
+            buffer.write(content)
+        comprovante_url = f"/static/comprovantes/{safe_filename}"
         
     # Determina o novo status
     # Se o cliente enviou, vai para "Aguardando Auditoria" para a consultoria auditar
@@ -223,12 +243,10 @@ async def upload_receipt(
     novo_status = "Aguardando Auditoria" if current_user.role == "cliente" else "Concluído"
     data_concl = datetime.utcnow() if current_user.role != "cliente" else None
     
-    # Atualiza a tarefa no banco
-    comprovante_url = f"/static/comprovantes/{safe_filename}"
-    
     nova_obs = HistoricoObservacao(
         usuario_id=current_user.id,
-        texto=f"Comprovante enviado: {file.filename}. Status alterado para {novo_status}."
+        texto=f"Comprovante enviado: {file.filename}. Status alterado para {novo_status}.",
+        autor=current_user.nome
     )
     historico = task.historico_observacoes
     historico.append(nova_obs)
@@ -238,6 +256,7 @@ async def upload_receipt(
         {
             "$set": {
                 "comprovante_url": comprovante_url,
+                "comprovante_key": comprovante_key,
                 "status": novo_status,
                 "data_conclusao": data_concl,
                 "historico_observacoes": [obs.model_dump(by_alias=True) for obs in historico]
@@ -247,6 +266,64 @@ async def upload_receipt(
     )
     
     return TarefaResponse(**result)
+
+
+@router.get("/{tarefa_id}/download")
+async def download_receipt(
+    tarefa_id: str,
+    current_user: UsuarioDB = Depends(get_current_active_user)
+):
+    """Retorna o comprovante/evidência da tarefa. Se o comprovante estiver armazenado no MinIO,
+    faz o streaming dele. Se for local, retorna o FileResponse local.
+    """
+    db = get_database()
+    task_dict = await db.tarefas.find_one({"_id": ObjectId(tarefa_id)})
+    if not task_dict:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tarefa não encontrada"
+        )
+        
+    task = TarefaDB(**task_dict)
+    
+    # Restrição de Cliente
+    if current_user.role == "cliente" and task.empresa_id != current_user.empresa_cliente_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acesso não autorizado para esta tarefa"
+        )
+        
+    if not task.comprovante_url:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Nenhum comprovante enviado para esta tarefa"
+        )
+        
+    # Se está no MinIO (comprovante_key está definido)
+    if task.comprovante_key:
+        response = get_from_minio(task.comprovante_key)
+        if response:
+            headers = {
+                "Content-Disposition": f"attachment; filename={task.comprovante_key}"
+            }
+            # Stream the file from MinIO response
+            return StreamingResponse(
+                io.BytesIO(response.read()),
+                media_type="application/octet-stream",
+                headers=headers
+            )
+            
+    # Fallback para local
+    if "/static/comprovantes/" in task.comprovante_url:
+        filename = task.comprovante_url.split("/static/comprovantes/")[1]
+        file_path = os.path.join(UPLOAD_DIR, filename)
+        if os.path.exists(file_path):
+            return FileResponse(file_path)
+            
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Arquivo do comprovante não encontrado"
+    )
 
 
 @router.post("/{tarefa_id}/notificar", response_model=TarefaResponse)
@@ -312,8 +389,54 @@ async def notify_task_responsible(
     historico = task.historico_observacoes
     historico.append(HistoricoObservacao(
         usuario_id=current_user.id,
-        texto=log_texto
+        texto=log_texto,
+        autor=current_user.nome
     ))
+    
+    result = await db.tarefas.find_one_and_update(
+        {"_id": ObjectId(tarefa_id)},
+        {"$set": {"historico_observacoes": [obs.model_dump(by_alias=True) for obs in historico]}},
+        return_document=True
+    )
+    
+    return TarefaResponse(**result)
+
+
+@router.post("/{tarefa_id}/observacao", response_model=TarefaResponse)
+async def add_task_observation(
+    tarefa_id: str,
+    texto: str = Query(..., min_length=1, description="Texto da observação/mensagem"),
+    current_user: UsuarioDB = Depends(get_current_active_user)
+):
+    """Adiciona uma observação/comunicação de texto no histórico da tarefa, permitindo
+    a comunicação entre o cliente (empresa) e o prestador (consultoria).
+    """
+    db = get_database()
+    
+    task_dict = await db.tarefas.find_one({"_id": ObjectId(tarefa_id)})
+    if not task_dict:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tarefa não encontrada"
+        )
+        
+    task = TarefaDB(**task_dict)
+    
+    # Validações de permissão: Clientes só podem comentar em tarefas de sua própria empresa
+    if current_user.role == "cliente" and task.empresa_id != current_user.empresa_cliente_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Você não tem permissão para comentar nesta tarefa"
+        )
+        
+    # Adiciona a mensagem ao histórico de observações
+    nova_obs = HistoricoObservacao(
+        usuario_id=current_user.id,
+        texto=texto,
+        autor=current_user.nome
+    )
+    historico = task.historico_observacoes
+    historico.append(nova_obs)
     
     result = await db.tarefas.find_one_and_update(
         {"_id": ObjectId(tarefa_id)},

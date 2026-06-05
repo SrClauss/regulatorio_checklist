@@ -124,17 +124,17 @@ export default function CondicionanteDetail({ taskId, user, onBack, onGoToCompan
 
   const handleRegistrarProvidencia = async () => {
     if (!textoProvidencia.trim()) {
-      showToast('error', 'Digite a providência antes de registrar.');
+      showToast('error', 'Digite a mensagem antes de enviar.');
       return;
     }
 
     try {
-      const updated = await api.updateTarefa(task._id, {}, textoProvidencia.trim());
+      const updated = await api.addTarefaObservacao(task._id, textoProvidencia.trim());
       setTask(updated);
       setTextoProvidencia('');
-      showToast('success', 'Providência / Andamento registrado com sucesso!');
+      showToast('success', 'Mensagem enviada com sucesso!');
     } catch (err) {
-      showToast('error', err.message || 'Falha ao registrar providência.');
+      showToast('error', err.message || 'Falha ao enviar mensagem.');
     }
   };
 
@@ -418,18 +418,18 @@ export default function CondicionanteDetail({ taskId, user, onBack, onGoToCompan
 
               {/* Registro de Providências (Traceability) */}
               <div style={styles.actionBox} className="glass-card">
-                <span style={styles.actionBoxTitle}>Registrar Andamento / Providência</span>
-                <p style={styles.actionBoxDesc}>Adicione observações e ações tomadas nesta condicionante para fins de auditoria.</p>
+                <span style={styles.actionBoxTitle}>Enviar Mensagem / Solicitar Documento</span>
+                <p style={styles.actionBoxDesc}>Utilize este canal para se comunicar diretamente com o prestador de serviço técnico ou registrar andamentos.</p>
                 <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
                   <input 
                     type="text" 
                     value={textoProvidencia} 
                     onChange={e => setTextoProvidencia(e.target.value)} 
-                    placeholder="Descreva o andamento da tarefa..."
+                    placeholder="Digite sua mensagem ou solicitação..."
                     className="glass-input"
                   />
-                  <button onClick={handleRegistrarProvidencia} className="glass-btn">
-                    Registrar
+                  <button onClick={handleRegistrarProvidencia} className="glass-btn glass-btn-primary">
+                    Enviar
                   </button>
                 </div>
               </div>

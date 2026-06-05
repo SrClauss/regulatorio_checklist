@@ -12,6 +12,12 @@ class Settings(BaseSettings):
     VAPID_PUBLIC_KEY: str = Field(default="")
     VAPID_PRIVATE_KEY: str = Field(default="")
 
+    MINIO_ENDPOINT: str = Field(default="localhost:9000")
+    MINIO_ACCESS_KEY: str = Field(default="minioadmin")
+    MINIO_SECRET_KEY: str = Field(default="minioadmin")
+    MINIO_BUCKET_NAME: str = Field(default="evidencias")
+    MINIO_SECURE: bool = Field(default=False)
+
     model_config = SettingsConfigDict(
         env_file="backend/.env",
         env_file_encoding="utf-8",

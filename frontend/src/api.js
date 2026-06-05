@@ -244,6 +244,18 @@ export const api = {
     return response.json();
   },
 
+  async addTarefaObservacao(id, texto) {
+    const response = await fetch(`${API_BASE_URL}/api/tarefas/${id}/observacao?texto=${encodeURIComponent(texto)}`, {
+      method: 'POST',
+      headers: getHeaders(),
+    });
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.detail || 'Falha ao registrar observação');
+    }
+    return response.json();
+  },
+
   async uploadComprovante(id, file) {
     const formData = new FormData();
     formData.append('file', file);

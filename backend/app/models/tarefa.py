@@ -7,6 +7,7 @@ class HistoricoObservacao(BaseModel):
     data: datetime = Field(default_factory=datetime.utcnow)
     usuario_id: PyObjectId
     texto: str
+    autor: Optional[str] = None
 
 class TarefaBase(BaseModel):
     documento_id: Optional[PyObjectId] = Field(default=None, description="Documento do qual a condicionante faz parte (opcional)")
@@ -21,6 +22,7 @@ class TarefaBase(BaseModel):
     valor_estimado: float = Field(default=0.0, description="Receita cobrada ao executar esta condicionante")
     data_conclusao: Optional[datetime] = None
     comprovante_url: Optional[str] = None
+    comprovante_key: Optional[str] = Field(default=None, description="Nome da chave/objeto no MinIO correspondente ao comprovante")
     periodicidade: str = Field(default="Mensal", description="Diária, Semanal, Mensal, Outra")
     historico_observacoes: List[HistoricoObservacao] = Field(default_factory=list)
     e_pre_requisito: bool = Field(default=False, description="Se True, é pré-requisito para renovação e não deve ser resetada como Pendente ao renovar")
@@ -41,6 +43,7 @@ class TarefaUpdate(BaseModel):
     valor_estimado: Optional[float] = None
     data_conclusao: Optional[datetime] = None
     comprovante_url: Optional[str] = None
+    comprovante_key: Optional[str] = None
     periodicidade: Optional[str] = None
     historico_observacoes: Optional[List[HistoricoObservacao]] = None
     e_pre_requisito: Optional[bool] = None
