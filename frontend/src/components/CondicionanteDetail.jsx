@@ -224,7 +224,7 @@ export default function CondicionanteDetail({ taskId, user, onBack, onGoToCompan
       </div>
 
       {/* Main Grid Layout */}
-      <div style={styles.mainGrid}>
+      <div style={styles.mainGrid} className="condicionante-detail-grid">
         {/* Left Column: Ficha de Informações */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           <div className="glass-panel" style={styles.cardInfo}>

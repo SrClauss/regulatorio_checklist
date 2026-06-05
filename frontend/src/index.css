@@ -528,7 +528,8 @@ h1, h2, h3, h4, h5, h6 {
   .empresas-grid, 
   .documentos-grid, 
   .grid-two-columns, 
-  .dashboard-card-grid {
+  .dashboard-card-grid,
+  .condicionante-detail-grid {
     grid-template-columns: 1fr !important;
     gap: 1rem !important;
   }
