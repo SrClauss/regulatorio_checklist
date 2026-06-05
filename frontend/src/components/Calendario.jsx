@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api';
-import { ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, Clock, CheckCircle, ArrowLeft, Bell, ExternalLink } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, Clock, CheckCircle, ArrowLeft, Bell, ExternalLink, RefreshCw } from 'lucide-react';
 
 export default function Calendario({ user, onViewTask }) {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -12,6 +12,55 @@ export default function Calendario({ user, onViewTask }) {
   const [loading, setLoading] = useState(true);
   const [notifyingTaskId, setNotifyingTaskId] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
+
+  // Estados de Renovação de Documento
+  const [renewingDoc, setRenewingDoc] = useState(null);
+  const [renewalForm, setRenewalForm] = useState({
+    data_emissao: '',
+    data_vencimento: '',
+    valor_renovacao: 0,
+    regerar_condicionantes: true
+  });
+  const [submittingRenewal, setSubmittingRenewal] = useState(false);
+
+  const startRenewal = (doc) => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const nextYear = new Date();
+    nextYear.setFullYear(nextYear.getFullYear() + 1);
+    const nextYearStr = nextYear.toISOString().split('T')[0];
+    
+    setRenewalForm({
+      data_emissao: todayStr,
+      data_vencimento: nextYearStr,
+      valor_renovacao: doc.valor_renovacao || 0,
+      regerar_condicionantes: true
+    });
+    setRenewingDoc(doc);
+  };
+
+  const handleRenewSubmit = async () => {
+    if (!renewingDoc) return;
+    setSubmittingRenewal(true);
+    try {
+      const payload = {
+        data_emissao: new Date(renewalForm.data_emissao).toISOString(),
+        data_vencimento: new Date(renewalForm.data_vencimento).toISOString(),
+        valor_renovacao: parseFloat(renewalForm.valor_renovacao) || 0,
+        regerar_condicionantes: renewalForm.regerar_condicionantes
+      };
+      
+      await api.renewDocumento(renewingDoc._id, payload);
+      setToastMessage({ type: 'success', text: 'Documento renovado com sucesso! As novas condicionantes foram geradas.' });
+      setRenewingDoc(null);
+      await fetchData();
+      setSelectedDayEvents(null); // Fecha o drawer lateral
+    } catch (err) {
+      setToastMessage({ type: 'error', text: err.message || 'Falha ao renovar documento.' });
+    } finally {
+      setSubmittingRenewal(false);
+      setTimeout(() => setToastMessage(null), 4000);
+    }
+  };
 
   const handleNotify = async (taskId) => {
     setNotifyingTaskId(taskId);
@@ -34,19 +83,20 @@ export default function Calendario({ user, onViewTask }) {
     }
   };
 
+  const fetchData = async () => {
+    try {
+      const tList = await api.listTarefas();
+      const dList = await api.listDocumentos();
+      setTarefas(tList);
+      setDocumentos(dList);
+    } catch (err) {
+      console.error("Erro ao obter dados para o calendário:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const tList = await api.listTarefas();
-        const dList = await api.listDocumentos();
-        setTarefas(tList);
-        setDocumentos(dList);
-      } catch (err) {
-        console.error("Erro ao obter dados para o calendário:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchData();
   }, []);
 
@@ -340,6 +390,23 @@ export default function Calendario({ user, onViewTask }) {
                           <span style={styles.eventCardSub}>Órgão: {doc.orgao}</span>
                           <span style={styles.eventCardSub}>Processo: {doc.numero_processo || 'Não informado'}</span>
                           <span style={styles.eventCardSub}>Status: {doc.status}</span>
+                          {user.role !== 'cliente' && (
+                            <div style={{ display: 'flex', marginTop: '0.5rem' }}>
+                              <button 
+                                onClick={() => startRenewal(doc)}
+                                className="glass-btn"
+                                style={{
+                                  ...styles.calendarActionBtn,
+                                  color: 'var(--success)',
+                                  borderColor: 'rgba(16, 185, 129, 0.2)',
+                                }}
+                                title="Registrar renovação do documento"
+                              >
+                                <RefreshCw size={12} />
+                                <span>Renovar Licença</span>
+                              </button>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -415,6 +482,86 @@ export default function Calendario({ user, onViewTask }) {
               </div>
             </div>
           )}
+        </div>
+      )}
+      {/* MODAL DE RENOVAÇÃO */}
+      {renewingDoc && (
+        <div style={styles.modalOverlay} onClick={() => setRenewingDoc(null)}>
+          <div className="glass-panel animate-fade-in" style={styles.modalCard} onClick={e => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h3 style={styles.modalTitle}>Renovar Documento / Licença</h3>
+              <button onClick={() => setRenewingDoc(null)} style={styles.closeBtn}>
+                <X size={18} />
+              </button>
+            </div>
+            <div style={styles.modalBody}>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.25rem', lineHeight: '1.4' }}>
+                Você está registrando a renovação de: <strong style={{ color: 'var(--text-main)' }}>{renewingDoc.tipo}</strong>.<br />
+                Insira as datas do novo ciclo. O sistema prorrogará o status da licença para <strong>Ativo</strong>.
+              </p>
+
+              <div className="glass-input-group" style={{ marginBottom: '1rem' }}>
+                <label className="glass-label">Nova Data de Emissão</label>
+                <input 
+                  type="date" 
+                  value={renewalForm.data_emissao} 
+                  onChange={e => setRenewalForm({ ...renewalForm, data_emissao: e.target.value })}
+                  className="glass-input" 
+                />
+              </div>
+
+              <div className="glass-input-group" style={{ marginBottom: '1rem' }}>
+                <label className="glass-label">Nova Data de Vencimento</label>
+                <input 
+                  type="date" 
+                  value={renewalForm.data_vencimento} 
+                  onChange={e => setRenewalForm({ ...renewalForm, data_vencimento: e.target.value })}
+                  className="glass-input" 
+                />
+              </div>
+
+              <div className="glass-input-group" style={{ marginBottom: '1.25rem' }}>
+                <label className="glass-label">Valor de Renovação Técnico (R$)</label>
+                <input 
+                  type="number" 
+                  step="0.01"
+                  value={renewalForm.valor_renovacao} 
+                  onChange={e => setRenewalForm({ ...renewalForm, valor_renovacao: parseFloat(e.target.value) || 0 })}
+                  className="glass-input" 
+                />
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginTop: '0.5rem' }}>
+                <input 
+                  type="checkbox" 
+                  id="regerar_cond"
+                  checked={renewalForm.regerar_condicionantes} 
+                  onChange={e => setRenewalForm({ ...renewalForm, regerar_condicionantes: e.target.checked })}
+                  style={{ width: '17px', height: '17px', cursor: 'pointer' }}
+                />
+                <label htmlFor="regerar_cond" style={{ fontSize: '0.85rem', color: 'var(--text-main)', cursor: 'pointer', fontWeight: '500' }}>
+                  Regerar condicionantes para o novo ciclo
+                </label>
+              </div>
+            </div>
+            <div style={styles.modalFooter}>
+              <button 
+                onClick={() => setRenewingDoc(null)} 
+                className="glass-btn"
+                style={{ padding: '0.5rem 1.25rem' }}
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={handleRenewSubmit} 
+                className="glass-btn glass-btn-primary"
+                style={{ padding: '0.5rem 1.25rem' }}
+                disabled={submittingRenewal}
+              >
+                {submittingRenewal ? 'Processando...' : 'Confirmar Renovação'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -764,5 +911,60 @@ const styles = {
     borderRadius: '8px',
     cursor: 'pointer',
     fontWeight: '550',
+  },
+  modalOverlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: 'rgba(15, 23, 42, 0.35)',
+    backdropFilter: 'blur(6px)',
+    zIndex: 1000,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCard: {
+    width: '90%',
+    maxWidth: '420px',
+    padding: '1.5rem',
+    borderRadius: '16px',
+    boxShadow: 'var(--shadow-lg)',
+    textAlign: 'left',
+  },
+  modalHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '1rem',
+    borderBottom: '1px solid var(--glass-border)',
+    paddingBottom: '0.75rem',
+  },
+  modalTitle: {
+    fontSize: '1.1rem',
+    fontWeight: '700',
+    color: 'var(--text-main)',
+  },
+  modalBody: {
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  modalFooter: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    gap: '0.75rem',
+    marginTop: '1.5rem',
+    borderTop: '1px solid var(--glass-border)',
+    paddingTop: '1rem',
+  },
+  closeBtn: {
+    background: 'transparent',
+    border: 'none',
+    cursor: 'pointer',
+    color: 'var(--text-muted)',
+    display: 'flex',
+    alignItems: 'center',
+    padding: '0.2rem',
   },
 };

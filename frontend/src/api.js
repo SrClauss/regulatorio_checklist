@@ -145,6 +145,19 @@ export const api = {
     return response.json();
   },
 
+  async renewDocumento(documentoId, data) {
+    const response = await fetch(`${API_BASE_URL}/api/documentos/${documentoId}/renovar`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.detail || 'Falha ao renovar documento');
+    }
+    return response.json();
+  },
+
   // Tarefas (Checklist)
   async listTarefas(filters = {}) {
     const params = new URLSearchParams();

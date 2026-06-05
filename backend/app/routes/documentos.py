@@ -205,3 +205,121 @@ async def delete_document(documento_id: str, current_user: UsuarioDB = Depends(a
             detail="Documento não encontrado"
         )
     return None
+
+from pydantic import BaseModel
+
+class DocumentoRenovar(BaseModel):
+    data_emissao: datetime
+    data_vencimento: datetime
+    valor_renovacao: float
+    regerar_condicionantes: bool = True
+
+@router.post("/{documento_id}/renovar", response_model=DocumentoResponse)
+async def renew_document(
+    documento_id: str,
+    renovacao: DocumentoRenovar,
+    current_user: UsuarioDB = Depends(allow_staff)
+):
+    """Realiza a renovação de uma licença/documento vencido, atualizando datas e regerando tarefas."""
+    db = get_database()
+    
+    doc = await db.documentos.find_one({"_id": ObjectId(documento_id)})
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Documento não encontrado"
+        )
+        
+    updated_doc = await db.documentos.find_one_and_update(
+        {"_id": ObjectId(documento_id)},
+        {
+            "$set": {
+                "data_emissao": renovacao.data_emissao,
+                "data_vencimento": renovacao.data_vencimento,
+                "valor_renovacao": renovacao.valor_renovacao,
+                "status": "Ativo" if renovacao.data_vencimento > datetime.utcnow() else "Vencido"
+            }
+        },
+        return_document=True
+    )
+    
+    if renovacao.regerar_condicionantes:
+        # Exclui tarefas pendentes do ciclo antigo
+        await db.tarefas.delete_many({
+            "documento_id": ObjectId(documento_id),
+            "status": {"$in": ["Pendente", "Em Andamento", "Atrasado", "Aguardando Auditoria"]}
+        })
+        
+        empresa = await db.empresas.find_one({"_id": doc["empresa_id"]})
+        template = None
+        if empresa:
+            template = await db.templates_documentos.find_one({
+                "$or": [
+                    {"nome_documento": doc["tipo"]},
+                    {"segmento": empresa["segmento"]}
+                ]
+            })
+            
+        if template:
+            tarefas_lote = []
+            responsavel_consultoria_id = empresa.get("responsavel_principal_id") if empresa else current_user.id
+            
+            responsavel_cliente_id = None
+            if empresa:
+                cliente_user = await db.usuarios.find_one({"empresa_cliente_id": empresa["_id"], "role": "cliente"})
+                if cliente_user:
+                    responsavel_cliente_id = cliente_user["_id"]
+            
+            for cond in template.get("condicionantes_sugeridas", []):
+                freq = cond.get("frequencia_meses", 0)
+                periodicidade = "Mensal" if freq == 1 else "Outra"
+                if freq == 0:
+                    nova_tarefa = TarefaDB(
+                        documento_id=ObjectId(documento_id),
+                        empresa_id=doc["empresa_id"],
+                        titulo=cond.get("titulo"),
+                        descricao=f"Condicionante única vinculada ao documento {doc['tipo']}",
+                        tipo_id="checklist_interno",
+                        cliente_executa=cond.get("cliente_executa", False),
+                        status="Pendente",
+                        responsavel_id=responsavel_cliente_id if cond.get("cliente_executa") and responsavel_cliente_id else responsavel_consultoria_id,
+                        data_vencimento=renovacao.data_vencimento,
+                        valor_estimado=cond.get("valor_sugerido", 0.0),
+                        periodicidade=periodicidade,
+                        historico_observacoes=[
+                            HistoricoObservacao(
+                                usuario_id=current_user.id,
+                                texto="Criada automaticamente via renovação do documento."
+                            )
+                        ]
+                    )
+                    tarefas_lote.append(nova_tarefa.model_dump(by_alias=True, exclude={"id"}))
+                elif freq > 0:
+                    data_corrente = add_months(renovacao.data_emissao, freq)
+                    while data_corrente <= renovacao.data_vencimento:
+                        nova_tarefa = TarefaDB(
+                            documento_id=ObjectId(documento_id),
+                            empresa_id=doc["empresa_id"],
+                            titulo=cond.get("titulo"),
+                            descricao=f"Condicionante periódica vinculada ao documento {doc['tipo']}",
+                            tipo_id="checklist_interno",
+                            cliente_executa=cond.get("cliente_executa", False),
+                            status="Pendente",
+                            responsavel_id=responsavel_cliente_id if cond.get("cliente_executa") and responsavel_cliente_id else responsavel_consultoria_id,
+                            data_vencimento=data_corrente,
+                            valor_estimado=cond.get("valor_sugerido", 0.0),
+                            periodicidade=periodicidade,
+                            historico_observacoes=[
+                                HistoricoObservacao(
+                                    usuario_id=current_user.id,
+                                    texto=f"Criada programada para {data_corrente.strftime('%d/%m/%Y')} via renovação."
+                                )
+                            ]
+                        )
+                        tarefas_lote.append(nova_tarefa.model_dump(by_alias=True, exclude={"id"}))
+                        data_corrente = add_months(data_corrente, freq)
+            
+            if tarefas_lote:
+                await db.tarefas.insert_many(tarefas_lote)
+                
+    return DocumentoResponse(**updated_doc)
