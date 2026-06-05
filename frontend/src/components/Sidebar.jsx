@@ -4,7 +4,7 @@ import {
   Shield, 
   LayoutDashboard, 
   Calendar, 
-  CheckSquare, 
+  FileText, 
   Settings, 
   LogOut, 
   User,
@@ -16,8 +16,8 @@ export default function Sidebar({ user, activeTab, setActiveTab, onLogout, isOnl
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'consultor'] },
     { id: 'empresas', label: 'Empresas', icon: Building, roles: ['admin', 'consultor'] },
+    { id: 'documentos', label: 'Documentos & Licenças', icon: FileText, roles: ['admin', 'consultor', 'cliente'] },
     { id: 'calendario', label: 'Calendário', icon: Calendar, roles: ['admin', 'consultor', 'cliente'] },
-    { id: 'checklist', label: 'Checklist & Auditoria', icon: CheckSquare, roles: ['admin', 'consultor', 'cliente'] },
     { id: 'cadastros', label: 'Cadastros & Painel', icon: Settings, roles: ['admin'] },
   ];
 

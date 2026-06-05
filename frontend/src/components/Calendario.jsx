@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../api';
 import { ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, Clock, CheckCircle, ArrowLeft, Bell, ExternalLink, RefreshCw } from 'lucide-react';
 
-export default function Calendario({ user, onViewTask, onGoToChecklist }) {
+export default function Calendario({ user, onViewTask, onViewDocument }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState('annual'); // 'annual' ou 'monthly'
   const [tarefas, setTarefas] = useState([]);
@@ -392,17 +392,17 @@ export default function Calendario({ user, onViewTask, onGoToChecklist }) {
                           <span style={styles.eventCardSub}>Status: {doc.status}</span>
                           <div style={{ display: 'flex', marginTop: '0.5rem' }}>
                             <button 
-                              onClick={() => onGoToChecklist && onGoToChecklist(doc.empresa_id, doc._id)}
+                              onClick={() => onViewDocument && onViewDocument(doc._id)}
                               className="glass-btn"
                               style={{
                                 ...styles.calendarActionBtn,
                                 color: 'var(--primary)',
                                 borderColor: 'rgba(37, 99, 235, 0.2)',
                               }}
-                              title="Ver condicionantes no Checklist"
+                              title="Ver Detalhes do Documento"
                             >
                               <ExternalLink size={12} />
-                              <span>Ver Condicionantes</span>
+                              <span>Ver Documento</span>
                             </button>
                           </div>
                         </div>
@@ -448,10 +448,10 @@ export default function Calendario({ user, onViewTask, onGoToChecklist }) {
                                 onClick={() => onViewTask(task._id)}
                                 className="glass-btn"
                                 style={styles.calendarActionBtn}
-                                title="Ver detalhes no Checklist"
+                                title="Ver detalhes da condicionante"
                               >
                                 <ExternalLink size={12} />
-                                <span>Ver Checklist</span>
+                                <span>Ver Condicionante</span>
                               </button>
 
                               {isPending && (

@@ -70,6 +70,15 @@ export const api = {
     return response.json();
   },
 
+  async getEmpresa(id) {
+    const response = await fetch(`${API_BASE_URL}/api/empresas/${id}`, {
+      method: 'GET',
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error('Falha ao obter detalhes da empresa');
+    return response.json();
+  },
+
   async createEmpresa(data) {
     const response = await fetch(`${API_BASE_URL}/api/empresas`, {
       method: 'POST',
@@ -126,6 +135,15 @@ export const api = {
       }
       throw error;
     }
+  },
+
+  async getDocumento(id) {
+    const response = await fetch(`${API_BASE_URL}/api/documentos/${id}`, {
+      method: 'GET',
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error('Falha ao obter detalhes do documento');
+    return response.json();
   },
 
   async createDocumento(data, templateId = null) {
@@ -186,6 +204,15 @@ export const api = {
       }
       throw error;
     }
+  },
+
+  async getTarefa(id) {
+    const response = await fetch(`${API_BASE_URL}/api/tarefas/${id}`, {
+      method: 'GET',
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error('Falha ao obter detalhes da condicionante');
+    return response.json();
   },
 
   async updateTarefa(id, payload, observacao = null) {

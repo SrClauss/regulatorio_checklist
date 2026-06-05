@@ -4,9 +4,12 @@ import Login from './components/Login';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import Calendario from './components/Calendario';
-import Checklist from './components/Checklist';
 import Cadastros from './components/Cadastros';
 import Empresas from './components/Empresas';
+import Documentos from './components/Documentos';
+import EmpresaDetail from './components/EmpresaDetail';
+import DocumentoDetail from './components/DocumentoDetail';
+import CondicionanteDetail from './components/CondicionanteDetail';
 import { registerPushNotifications } from './utils/pushSubscription';
 
 function App() {
@@ -18,15 +21,19 @@ function App() {
   const [selectedCompanyId, setSelectedCompanyId] = useState(null);
   const [selectedDocumentId, setSelectedDocumentId] = useState(null);
 
-  const handleViewTask = (taskId) => {
-    setSelectedTaskId(taskId);
-    setActiveTab('checklist');
+  const handleViewCompany = (companyId) => {
+    setSelectedCompanyId(companyId);
+    setActiveTab('empresa-detail');
   };
 
-  const handleGoToChecklist = (companyId, documentId = null) => {
-    setSelectedCompanyId(companyId);
+  const handleViewDocument = (documentId) => {
     setSelectedDocumentId(documentId);
-    setActiveTab('checklist');
+    setActiveTab('documento-detail');
+  };
+
+  const handleViewTask = (taskId) => {
+    setSelectedTaskId(taskId);
+    setActiveTab('condicionante-detail');
   };
 
   useEffect(() => {
@@ -50,7 +57,7 @@ function App() {
           const userData = await api.getMe();
           setUser(userData);
           if (userData.role === 'cliente') {
-            setActiveTab('checklist');
+            setActiveTab('calendario');
           }
           // Registra push notification se suportado e autenticado
           setTimeout(() => registerPushNotifications(), 1500);
@@ -67,12 +74,15 @@ function App() {
 
   const handleLoginSuccess = (userData) => {
     setUser(userData);
-    setActiveTab(userData.role === 'cliente' ? 'checklist' : 'dashboard');
+    setActiveTab(userData.role === 'cliente' ? 'calendario' : 'dashboard');
     setTimeout(() => registerPushNotifications(), 1000);
   };
 
   const handleLogout = () => {
     setUser(null);
+    setSelectedTaskId(null);
+    setSelectedCompanyId(null);
+    setSelectedDocumentId(null);
   };
 
   if (checkingAuth) {
@@ -95,27 +105,90 @@ function App() {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <Dashboard user={user} />;
-      case 'empresas':
-        return <Empresas user={user} onGoToChecklist={handleGoToChecklist} />;
-      case 'calendario':
-        return <Calendario user={user} onViewTask={handleViewTask} onGoToChecklist={handleGoToChecklist} />;
-      case 'checklist':
         return (
-          <Checklist 
+          <Dashboard 
             user={user} 
-            selectedTaskId={selectedTaskId} 
-            onClearSelectedTask={() => setSelectedTaskId(null)} 
-            initialCompanyId={selectedCompanyId}
-            onClearCompanyFilter={() => setSelectedCompanyId(null)}
-            initialDocumentId={selectedDocumentId}
-            onClearDocumentFilter={() => setSelectedDocumentId(null)}
+            onViewTask={handleViewTask} 
+            onViewDocument={handleViewDocument} 
+          />
+        );
+      case 'empresas':
+        return (
+          <Empresas 
+            user={user} 
+            onViewCompany={handleViewCompany} 
+          />
+        );
+      case 'documentos':
+        return (
+          <Documentos 
+            user={user} 
+            onViewDocument={handleViewDocument} 
+            onGoToCompany={handleViewCompany} 
+          />
+        );
+      case 'calendario':
+        return (
+          <Calendario 
+            user={user} 
+            onViewTask={handleViewTask} 
+            onViewDocument={handleViewDocument} 
           />
         );
       case 'cadastros':
         return <Cadastros user={user} />;
+      case 'empresa-detail':
+        return (
+          <EmpresaDetail 
+            companyId={selectedCompanyId} 
+            user={user} 
+            onBack={() => setActiveTab('empresas')} 
+            onViewDocument={handleViewDocument} 
+            onViewTask={handleViewTask} 
+          />
+        );
+      case 'documento-detail':
+        return (
+          <DocumentoDetail 
+            documentId={selectedDocumentId} 
+            user={user} 
+            onBack={() => {
+              if (selectedCompanyId) {
+                setActiveTab('empresa-detail');
+              } else {
+                setActiveTab('calendario');
+              }
+            }} 
+            onGoToCompany={handleViewCompany} 
+            onViewTask={handleViewTask} 
+          />
+        );
+      case 'condicionante-detail':
+        return (
+          <CondicionanteDetail 
+            taskId={selectedTaskId} 
+            user={user} 
+            onBack={() => {
+              if (selectedDocumentId) {
+                setActiveTab('documento-detail');
+              } else if (selectedCompanyId) {
+                setActiveTab('empresa-detail');
+              } else {
+                setActiveTab('calendario');
+              }
+            }} 
+            onGoToCompany={handleViewCompany} 
+            onGoToDocument={handleViewDocument} 
+          />
+        );
       default:
-        return <Dashboard user={user} />;
+        return (
+          <Dashboard 
+            user={user} 
+            onViewTask={handleViewTask} 
+            onViewDocument={handleViewDocument} 
+          />
+        );
     }
   };
 
@@ -125,7 +198,13 @@ function App() {
       <Sidebar 
         user={user} 
         activeTab={activeTab} 
-        setActiveTab={setActiveTab} 
+        setActiveTab={(tab) => {
+          // Reset context values when selecting main sidebar tabs
+          setSelectedTaskId(null);
+          setSelectedCompanyId(null);
+          setSelectedDocumentId(null);
+          setActiveTab(tab);
+        }} 
         onLogout={handleLogout} 
         isOnline={isOnline}
       />

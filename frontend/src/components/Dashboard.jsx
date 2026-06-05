@@ -9,7 +9,7 @@ import {
   FileWarning 
 } from 'lucide-react';
 
-export default function Dashboard({ user }) {
+export default function Dashboard({ user, onViewTask, onViewDocument }) {
   const [faturamentoMensal, setFaturamentoMensal] = useState({ receita_estimada: 0, custo_renovacoes: 0, faturamento_liquido: 0 });
   const [anualData, setAnualData] = useState([]);
   const [tarefasUrgentes, setTarefasUrgentes] = useState([]);
@@ -217,7 +217,12 @@ export default function Dashboard({ user }) {
                 <p style={styles.emptyText}>Nenhuma tarefa urgente pendente.</p>
               ) : (
                 tarefasUrgentes.map(t => (
-                  <div key={t._id} style={styles.listItem}>
+                  <div 
+                    key={t._id} 
+                    style={{ ...styles.listItem, cursor: 'pointer' }}
+                    onClick={() => onViewTask && onViewTask(t._id)}
+                    className="card-hover"
+                  >
                     <div style={styles.listItemInfo}>
                       <h4 style={styles.itemTitle}>{t.titulo}</h4>
                       <span style={styles.itemDate}>Vence em: {formatDate(t.data_vencimento)}</span>
@@ -242,7 +247,12 @@ export default function Dashboard({ user }) {
                 <p style={styles.emptyText}>Nenhum documento prestes a expirar.</p>
               ) : (
                 documentosUrgentes.map(d => (
-                  <div key={d._id} style={styles.listItem}>
+                  <div 
+                    key={d._id} 
+                    style={{ ...styles.listItem, cursor: 'pointer' }}
+                    onClick={() => onViewDocument && onViewDocument(d._id)}
+                    className="card-hover"
+                  >
                     <div style={styles.listItemInfo}>
                       <h4 style={styles.itemTitle}>{d.tipo}</h4>
                       <span style={styles.itemDate}>Vencimento: {formatDate(d.data_vencimento)}</span>

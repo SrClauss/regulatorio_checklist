@@ -15,7 +15,7 @@ import {
   User 
 } from 'lucide-react';
 
-export default function Empresas({ user, onGoToChecklist }) {
+export default function Empresas({ user, onViewCompany }) {
   const [empresas, setEmpresas] = useState([]);
   const [documentos, setDocumentos] = useState([]);
   const [tarefas, setTarefas] = useState([]);
@@ -25,9 +25,6 @@ export default function Empresas({ user, onGoToChecklist }) {
   // Filtros
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSegment, setSelectedSegment] = useState('');
-
-  // Detalhes
-  const [selectedEmpresa, setSelectedEmpresa] = useState(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -152,7 +149,7 @@ export default function Empresas({ user, onGoToChecklist }) {
               key={emp._id} 
               className="glass-panel card-hover" 
               style={styles.card}
-              onClick={() => setSelectedEmpresa(emp)}
+              onClick={() => onViewCompany(emp._id)}
             >
               <div style={styles.cardHeader}>
                 <div style={styles.brandIconContainer}>
@@ -207,148 +204,6 @@ export default function Empresas({ user, onGoToChecklist }) {
         })}
       </div>
 
-      {/* Slide-out Drawer / Modal de Detalhes da Empresa */}
-      {selectedEmpresa && (
-        <div style={styles.drawerOverlay} onClick={() => setSelectedEmpresa(null)}>
-          <div 
-            className="glass-panel animate-fade-in" 
-            style={styles.drawer} 
-            onClick={e => e.stopPropagation()}
-          >
-            <div style={styles.drawerHeader}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <div style={styles.drawerIcon}>
-                  <Building size={22} color="var(--primary)" />
-                </div>
-                <div>
-                  <h2 style={styles.drawerTitle}>{selectedEmpresa.nome_fantasia}</h2>
-                  <span style={styles.drawerSubtitle}>{selectedEmpresa.razao_social}</span>
-                </div>
-              </div>
-              <button onClick={() => setSelectedEmpresa(null)} style={styles.closeBtn}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <div style={styles.drawerContent}>
-              {/* Informações Gerais */}
-              <div style={styles.drawerSection} className="glass-card">
-                <h4 style={styles.sectionTitle}>Cadastro</h4>
-                <div style={styles.detailsGrid}>
-                  <div>
-                    <span style={styles.detailLabel}>CNPJ</span>
-                    <span style={styles.detailValue}>{selectedEmpresa.cnpj}</span>
-                  </div>
-                  <div>
-                    <span style={styles.detailLabel}>Cidade / UF</span>
-                    <span style={styles.detailValue}>{selectedEmpresa.cidade} - {selectedEmpresa.uf}</span>
-                  </div>
-                  <div>
-                    <span style={styles.detailLabel}>Responsável Técnico</span>
-                    <span style={styles.detailValue}>{getConsultorNome(selectedEmpresa.responsavel_principal_id)}</span>
-                  </div>
-                  <div>
-                    <span style={styles.detailLabel}>Segmento</span>
-                    <span style={styles.detailValue}>{selectedEmpresa.segmento}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Estatísticas Gráficas */}
-              <div style={styles.drawerSection}>
-                <h4 style={styles.sectionTitle}>Métricas de Operação</h4>
-                <div style={styles.metricsRow}>
-                  <div style={styles.metricItem} className="glass-card">
-                    <BarChart2 size={24} color="var(--primary)" />
-                    <span style={styles.metricVal}>{selectedStats.progress}%</span>
-                    <span style={styles.metricLabel}>Conformidade</span>
-                  </div>
-                  <div style={styles.metricItem} className="glass-card">
-                    <FileText size={24} color="var(--primary)" />
-                    <span style={styles.metricVal}>{selectedStats.activeDocs}</span>
-                    <span style={styles.metricLabel}>Licenças Ativas</span>
-                  </div>
-                  <div style={styles.metricItem} className="glass-card">
-                    <ClipboardList size={24} color="var(--warning)" />
-                    <span style={styles.metricVal}>{selectedStats.pendingTasks}</span>
-                    <span style={styles.metricLabel}>Ações Pendentes</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Lista de Documentos */}
-              <div style={styles.drawerSection}>
-                <h4 style={styles.sectionTitle}>Licenças & Certidões ({selectedEmpresaDocs.length})</h4>
-                <div style={styles.listContainer}>
-                  {selectedEmpresaDocs.map(doc => (
-                    <div key={doc._id} style={styles.docItem} className="glass-card">
-                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
-                        <div style={styles.docIconContainer}>
-                          <FileText size={16} color="var(--primary)" />
-                        </div>
-                        <div>
-                          <h5 style={styles.docTitle}>{doc.tipo}</h5>
-                          <span style={styles.docSubtitle}>Órgão: {doc.orgao} | Processo: {doc.numero_processo || 'N/A'}</span>
-                        </div>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <span style={{ 
-                          ...styles.statusBadge, 
-                          background: doc.status === 'Ativo' ? 'var(--success-light)' : 'var(--danger-light)',
-                          color: doc.status === 'Ativo' ? 'var(--success)' : 'var(--danger)'
-                        }}>{doc.status}</span>
-                        <p style={styles.docExpiry}>Vence: {new Date(doc.data_vencimento).toLocaleDateString('pt-BR')}</p>
-                      </div>
-                    </div>
-                  ))}
-                  {selectedEmpresaDocs.length === 0 && (
-                    <p style={styles.emptyText}>Nenhuma licença cadastrada para esta empresa.</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Lista de Tarefas / Checklist */}
-              <div style={styles.drawerSection}>
-                <h4 style={styles.sectionTitle}>Checklist e Pendências Recentes</h4>
-                <div style={styles.listContainer}>
-                  {selectedEmpresaTasks.slice(0, 5).map(task => (
-                    <div key={task._id} style={styles.taskItem} className="glass-card">
-                      <div>
-                        <h5 style={styles.taskTitle}>{task.titulo}</h5>
-                        <p style={styles.taskDesc}>{task.descricao}</p>
-                      </div>
-                      <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.25rem' }}>
-                        <span style={{
-                          ...styles.statusBadge,
-                          background: task.status === 'Concluído' ? 'var(--success-light)' : 'var(--warning-light)',
-                          color: task.status === 'Concluído' ? 'var(--success)' : 'var(--warning)'
-                        }}>{task.status}</span>
-                        <span style={styles.taskDate}>{new Date(task.data_vencimento).toLocaleDateString('pt-BR')}</span>
-                      </div>
-                    </div>
-                  ))}
-                  {selectedEmpresaTasks.length === 0 && (
-                    <p style={styles.emptyText}>Nenhuma condicionante agendada.</p>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div style={styles.drawerFooter}>
-              <button 
-                onClick={() => {
-                  onGoToChecklist(selectedEmpresa._id);
-                  setSelectedEmpresa(null);
-                }} 
-                className="glass-btn glass-btn-primary" 
-                style={styles.actionBtn}
-              >
-                Abrir Checklist Completo
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
