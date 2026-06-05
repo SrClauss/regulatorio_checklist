@@ -1,6 +1,7 @@
 import asyncio
 import os
 import sys
+import re
 from datetime import datetime
 
 # Adiciona o diretório atual ao path para resolver os imports de 'app'
@@ -26,7 +27,7 @@ def add_months(sourcedate: datetime, months: int) -> datetime:
     return datetime(year, month, day, sourcedate.hour, sourcedate.minute, sourcedate.second)
 
 async def run_seed():
-    print("Iniciando o Seeder do Banco de Dados...")
+    print("Iniciando o Seeder do Banco de Dados Expandido (21 Empresas)...")
     client = AsyncIOMotorClient(settings.MONGODB_URI)
     db = client[settings.DB_NAME]
     
@@ -39,11 +40,10 @@ async def run_seed():
     await db.templates_documentos.delete_many({})
     await db.inscricoes_push.delete_many({})
     
-    # 2. Cria Usuários Iniciais
-    print("Cadastrando usuários de teste...")
+    # 2. Cria Usuários Iniciais de Consultoria
+    print("Cadastrando equipe técnica...")
     admin_pw = get_password_hash("admin123")
     consultor_pw = get_password_hash("roberto123")
-    cliente_pw = get_password_hash("cliente123")
     
     admin = UsuarioDB(
         nome="Administrador Geral",
@@ -65,13 +65,13 @@ async def run_seed():
     consultor_res = await db.usuarios.insert_one(consultor.model_dump(by_alias=True, exclude={"id"}))
     consultor_id = consultor_res.inserted_id
     
-    print(f"-> Admin criado: admin@consultoria.com.br (ID: {admin_id})")
-    print(f"-> Consultor criado: roberto@consultoria.com.br (ID: {consultor_id})")
+    print(f"-> Admin criado: admin@consultoria.com.br")
+    print(f"-> Consultor criado: roberto@consultoria.com.br")
     
     # 3. Cria Templates de Documentos por Segmento
-    print("Cadastrando templates de documentos baseados no levantamento...")
+    print("Cadastrando templates de referência...")
     
-    templates = [
+    templates_data = [
         # Segmento: Farmácia
         TemplateDocumentoDB(
             segmento="Farmácia",
@@ -89,7 +89,7 @@ async def run_seed():
         TemplateDocumentoDB(
             segmento="Posto de Combustíveis",
             nome_documento="Licença de Operação Ambiental (LO)",
-            validade_meses_padrao=48, # 4 anos
+            validade_meses_padrao=48,
             valor_renovacao_sugerido=5000.0,
             condicionantes_sugeridas=[
                 CondicionanteSugerida(titulo="Teste de Estanqueidade do Sistema", frequencia_meses=24, cliente_executa=False, valor_sugerido=3500.0),
@@ -109,113 +109,194 @@ async def run_seed():
                 CondicionanteSugerida(titulo="Revisão do Manual de Boas Práticas e POPs", frequencia_meses=12, cliente_executa=False, valor_sugerido=2500.0),
                 CondicionanteSugerida(titulo="Análise de Potabilidade de Água", frequencia_meses=6, cliente_executa=False, valor_sugerido=350.0),
             ]
+        ),
+        # Segmento: Indústria
+        TemplateDocumentoDB(
+            segmento="Indústria",
+            nome_documento="Licença de Operação Ambiental (LO)",
+            validade_meses_padrao=24,
+            valor_renovacao_sugerido=6000.0,
+            condicionantes_sugeridas=[
+                CondicionanteSugerida(titulo="Laudo de Emissões Atmosféricas", frequencia_meses=12, cliente_executa=False, valor_sugerido=2500.0),
+                CondicionanteSugerida(titulo="Relatório de Geração de Resíduos Sólidos", frequencia_meses=6, cliente_executa=False, valor_sugerido=1500.0),
+                CondicionanteSugerida(titulo="Monitoramento de Ruído Limítrofe", frequencia_meses=12, cliente_executa=False, valor_sugerido=1800.0),
+            ]
+        ),
+        # Segmento: Saúde
+        TemplateDocumentoDB(
+            segmento="Saúde",
+            nome_documento="Licença de Funcionamento Sanitário (VISA)",
+            validade_meses_padrao=12,
+            valor_renovacao_sugerido=3000.0,
+            condicionantes_sugeridas=[
+                CondicionanteSugerida(titulo="Revisão Anual do PGRSS", frequencia_meses=12, cliente_executa=False, valor_sugerido=1500.0),
+                CondicionanteSugerida(titulo="Contrato e Comprovante de Coleta de Resíduos Grupo A/B", frequencia_meses=3, cliente_executa=True, valor_sugerido=600.0),
+                CondicionanteSugerida(titulo="Laudo de Radioproteção e Calibração", frequencia_meses=12, cliente_executa=False, valor_sugerido=2200.0),
+            ]
+        ),
+        # Segmento: Transporte
+        TemplateDocumentoDB(
+            segmento="Transporte",
+            nome_documento="Licença Ambiental de Transporte de Produtos Perigosos",
+            validade_meses_padrao=24,
+            valor_renovacao_sugerido=4500.0,
+            condicionantes_sugeridas=[
+                CondicionanteSugerida(titulo="Treinamento MOPP dos Motoristas", frequencia_meses=12, cliente_executa=True, valor_sugerido=800.0),
+                CondicionanteSugerida(titulo="Ficha de Emergência e Envelopamento de Cargas", frequencia_meses=1, cliente_executa=True, valor_sugerido=300.0),
+                CondicionanteSugerida(titulo="Plano de Atendimento a Emergências (PAE)", frequencia_meses=24, cliente_executa=False, valor_sugerido=4000.0),
+            ]
         )
     ]
     
-    for t in templates:
+    templates_dict = {}
+    for t in templates_data:
         res = await db.templates_documentos.insert_one(t.model_dump(by_alias=True, exclude={"id"}))
+        t_id = res.inserted_id
+        templates_dict[t.segmento] = (t_id, t)
         print(f"-> Template cadastrado: {t.nome_documento} ({t.segmento})")
         
-    # 4. Cria Empresa Cliente de Teste
-    print("Cadastrando empresa de exemplo...")
-    empresa = EmpresaDB(
-        razao_social="Alpha Alimentos LTDA",
-        nome_fantasia="Alpha Foods",
-        cnpj="11.222.333/0001-01",
-        cidade="São Paulo",
-        uf="SP",
-        segmento="Alimentos",
-        responsavel_principal_id=consultor_id,
-        ativo=True
-    )
-    empresa_res = await db.empresas.insert_one(empresa.model_dump(by_alias=True, exclude={"id"}))
-    empresa_id = empresa_res.inserted_id
-    print(f"-> Empresa criada: {empresa.nome_fantasia} (ID: {empresa_id})")
-    
-    # Cria o usuário do tipo cliente para esta empresa
-    cliente = UsuarioDB(
-        nome="Claudio Foods (Cliente)",
-        email="cliente@alpha.com.br",
-        role="cliente",
-        empresa_cliente_id=empresa_id,
-        ativo=True,
-        senha_hash=cliente_pw
-    )
-    cliente_res = await db.usuarios.insert_one(cliente.model_dump(by_alias=True, exclude={"id"}))
-    cliente_id = cliente_res.inserted_id
-    print(f"-> Usuário Cliente criado: cliente@alpha.com.br (ID: {cliente_id})")
-    
-    # 5. Cadastra um Documento Ativo (Alvará Sanitário) e simula o disparo em lote de Condicionantes
-    print("Cadastrando documento ativo e simulando a geração de condicionantes futuras...")
-    
-    data_emissao = datetime(2026, 6, 1)
-    data_vencimento = datetime(2028, 6, 1) # 2 anos de vigência
-    
-    documento = DocumentoDB(
-        empresa_id=empresa_id,
-        tipo="Alvará Sanitário Municipal",
-        orgao="Vigilância Sanitária SP",
-        numero_processo="2026/SP-991A",
-        data_emissao=data_emissao,
-        data_vencimento=data_vencimento,
-        status="Ativo",
-        valor_renovacao=1500.0,
-        responsavel_renovacao_id=consultor_id
-    )
-    
-    doc_res = await db.documentos.insert_one(documento.model_dump(by_alias=True, exclude={"id"}))
-    doc_id = doc_res.inserted_id
-    print(f"-> Documento cadastrado: {documento.tipo} (ID: {doc_id})")
-    
-    # Gera tarefas simuladas baseadas nas condicionantes sugeridas para Alimentos
-    print("Gerando tarefas condicionantes futuras ao longo de 2 anos...")
-    tarefas_geradas = []
-    
-    condicionantes = [
-        {"titulo": "Controle de Pragas (Dedetização)", "freq": 1, "cliente": True, "valor": 350.0},
-        {"titulo": "Análise de Potabilidade de Água", "freq": 6, "cliente": False, "valor": 350.0},
-        {"titulo": "Revisão do Manual de Boas Práticas e POPs", "freq": 12, "cliente": False, "valor": 2500.0}
+    # 4. Lista de 21 Empresas para Gerar
+    empresas_dados = [
+        {"razao": "Alpha Alimentos LTDA", "fantasia": "Alpha Foods", "cnpj": "11.222.333/0001-01", "cidade": "São Paulo", "uf": "SP", "seg": "Alimentos"},
+        {"razao": "Restaurante Sabor & Arte Ltda", "fantasia": "Sabor & Arte", "cnpj": "12.345.678/0001-02", "cidade": "Campinas", "uf": "SP", "seg": "Alimentos"},
+        {"razao": "Panificadora Pão de Ouro Ltda", "fantasia": "Pão de Ouro", "cnpj": "23.456.789/0001-03", "cidade": "São Bernardo", "uf": "SP", "seg": "Alimentos"},
+        {"razao": "Supermercado Bom Preço S.A.", "fantasia": "Bom Preço Super", "cnpj": "34.567.890/0001-04", "cidade": "Santos", "uf": "SP", "seg": "Alimentos"},
+        {"razao": "Distribuidora Frutos do Mar Ltda", "fantasia": "Frutos do Mar", "cnpj": "45.678.901/0001-05", "cidade": "Guarujá", "uf": "SP", "seg": "Alimentos"},
+        
+        {"razao": "Drogaria Nova Esperança Ltda", "fantasia": "Drogaria Esperança", "cnpj": "56.789.012/0001-06", "cidade": "Ribeirão Preto", "uf": "SP", "seg": "Farmácia"},
+        {"razao": "Farmácia Vida e Saúde Ltda", "fantasia": "Farma Vida", "cnpj": "67.890.123/0001-07", "cidade": "Sorocaba", "uf": "SP", "seg": "Farmácia"},
+        {"razao": "FarmaPlus Medicamentos S.A.", "fantasia": "FarmaPlus", "cnpj": "78.901.234/0001-08", "cidade": "São José dos Campos", "uf": "SP", "seg": "Farmácia"},
+        {"razao": "Drogaria Medicar Eireli", "fantasia": "Medicar Drogarias", "cnpj": "89.012.345/0001-09", "cidade": "Jundiaí", "uf": "SP", "seg": "Farmácia"},
+        
+        {"razao": "Auto Posto Shell Trevo Ltda", "fantasia": "Posto Trevo", "cnpj": "90.123.456/0001-10", "cidade": "Limeira", "uf": "SP", "seg": "Posto de Combustíveis"},
+        {"razao": "Posto Petrobras Centro Ltda", "fantasia": "Posto Central", "cnpj": "01.234.567/0001-11", "cidade": "Piracicaba", "uf": "SP", "seg": "Posto de Combustíveis"},
+        {"razao": "Posto Ipiranga Norte S.A.", "fantasia": "Posto Norte", "cnpj": "02.345.678/0001-12", "cidade": "Araraquara", "uf": "SP", "seg": "Posto de Combustíveis"},
+        {"razao": "Auto Posto Petrobrás Rodovia Ltda", "fantasia": "Posto da Rodovia", "cnpj": "03.456.789/0001-13", "cidade": "São Carlos", "uf": "SP", "seg": "Posto de Combustíveis"},
+        
+        {"razao": "Indústria Química Solvax Ltda", "fantasia": "Química Solvax", "cnpj": "04.567.890/0001-14", "cidade": "Diadema", "uf": "SP", "seg": "Indústria"},
+        {"razao": "Plásticos União S.A.", "fantasia": "Plásticos União", "cnpj": "05.678.901/0001-15", "cidade": "Mauá", "uf": "SP", "seg": "Indústria"},
+        {"razao": "Metalúrgica Tubox Ltda", "fantasia": "Metalúrgica Tubox", "cnpj": "06.789.012/0001-16", "cidade": "Guarulhos", "uf": "SP", "seg": "Indústria"},
+        
+        {"razao": "Clínica Médica MedVida Ltda", "fantasia": "MedVida", "cnpj": "07.890.123/0001-17", "cidade": "Osasco", "uf": "SP", "seg": "Saúde"},
+        {"razao": "Laboratório Bioclin S.A.", "fantasia": "Laboratório Bioclin", "cnpj": "08.901.234/0001-18", "cidade": "Barueri", "uf": "SP", "seg": "Saúde"},
+        {"razao": "Hospital Santa Casa Misericórdia", "fantasia": "Santa Casa", "cnpj": "09.901.234/0001-19", "cidade": "Mogi das Cruzes", "uf": "SP", "seg": "Saúde"},
+        
+        {"razao": "Transportadora Rápido SP Ltda", "fantasia": "Rápido SP Trans", "cnpj": "10.012.345/0001-20", "cidade": "São Paulo", "uf": "SP", "seg": "Transporte"},
+        {"razao": "TransQuímica Transportes Especiais", "fantasia": "TransQuímica", "cnpj": "11.123.456/0001-21", "cidade": "Paulínia", "uf": "SP", "seg": "Transporte"},
     ]
     
-    for cond in condicionantes:
-        freq = cond["freq"]
-        data_corrente = add_months(data_emissao, freq)
-        periodicidade = "Mensal" if freq == 1 else "Outra"
+    default_client_pw = get_password_hash("cliente123")
+    
+    total_tarefas = 0
+    total_docs = 0
+    
+    data_emissao = datetime(2026, 6, 1)
+    
+    print("\nProcessando cadastro das 21 empresas, clientes e licenças...")
+    
+    for idx, emp in enumerate(empresas_dados):
+        # 1. Cria Empresa
+        empresa_db = EmpresaDB(
+            razao_social=emp["razao"],
+            nome_fantasia=emp["fantasia"],
+            cnpj=emp["cnpj"],
+            cidade=emp["cidade"],
+            uf=emp["uf"],
+            segmento=emp["seg"],
+            responsavel_principal_id=consultor_id,
+            ativo=True
+        )
+        emp_res = await db.empresas.insert_one(empresa_db.model_dump(by_alias=True, exclude={"id"}))
+        emp_id = emp_res.inserted_id
         
-        while data_corrente <= data_vencimento:
-            # Associa o responsável adequado
-            resp_id = cliente_id if cond["cliente"] else consultor_id
+        # 2. Cria Usuário Cliente (único para cada empresa)
+        slug = re.sub(r'[^a-z0-9]', '', emp["fantasia"].lower())
+        cliente_email = f"cliente@{slug}.com.br"
+        # Se for o cliente original da Alpha Foods, mantém a credencial padrão
+        if emp["fantasia"] == "Alpha Foods":
+            cliente_email = "cliente@alpha.com.br"
             
-            nova_tarefa = TarefaDB(
-                documento_id=doc_id,
-                empresa_id=empresa_id,
-                titulo=cond["titulo"],
-                descricao=f"Condicionante periódica de {cond['titulo']} vinculada ao Alvará Sanitário.",
-                tipo_id="checklist_interno",
-                cliente_executa=cond["cliente"],
-                status="Pendente",
-                responsavel_id=resp_id,
-                data_vencimento=data_corrente,
-                valor_estimado=cond["valor"],
-                periodicidade=periodicidade,
-                historico_observacoes=[
-                    HistoricoObservacao(
-                        usuario_id=admin_id,
-                        texto="Inicializado via Seeder de teste."
-                    )
-                ]
+        cliente_db = UsuarioDB(
+            nome=f"Gestor {emp['fantasia']}",
+            email=cliente_email,
+            role="cliente",
+            empresa_cliente_id=emp_id,
+            ativo=True,
+            senha_hash=default_client_pw
+        )
+        cliente_res = await db.usuarios.insert_one(cliente_db.model_dump(by_alias=True, exclude={"id"}))
+        cliente_id = cliente_res.inserted_id
+        
+        # 3. Cria Documento Regulatório ativo com base no template correspondente
+        segmento = emp["seg"]
+        if segmento in templates_dict:
+            _, template = templates_dict[segmento]
+            
+            validade_meses = template.validade_meses_padrao
+            data_vencimento = add_months(data_emissao, validade_meses)
+            
+            doc_db = DocumentoDB(
+                empresa_id=emp_id,
+                tipo=template.nome_documento,
+                orgao=f"Órgão Regulador {segmento}",
+                numero_processo=f"2026/{segmento[:3].upper()}-{idx:03d}A",
+                data_emissao=data_emissao,
+                data_vencimento=data_vencimento,
+                status="Ativo",
+                valor_renovacao=template.valor_renovacao_sugerido,
+                responsavel_renovacao_id=consultor_id
             )
-            tarefas_geradas.append(nova_tarefa.model_dump(by_alias=True, exclude={"id"}))
-            data_corrente = add_months(data_corrente, freq)
+            doc_res = await db.documentos.insert_one(doc_db.model_dump(by_alias=True, exclude={"id"}))
+            doc_id = doc_res.inserted_id
+            total_docs += 1
             
-    # Adiciona tarefas avulsas extras (diárias e semanais) específicas para o cliente
-    data_hoje = datetime.utcnow()
-    tarefas_extras = [
-        TarefaDB(
+            # 4. Cria Tarefas Condicionantes baseadas nas sugestões do template
+            tarefas_empresa = []
+            for cond in template.condicionantes_sugeridas:
+                freq = cond.frequencia_meses
+                data_corrente = add_months(data_emissao, freq)
+                periodicidade = "Mensal" if freq == 1 else "Outra"
+                
+                while data_corrente <= data_vencimento:
+                    resp_id = cliente_id if cond.cliente_executa else consultor_id
+                    
+                    # Para dar realismo, algumas tarefas passadas ou próximas podem estar Concluídas ou Pendentes
+                    # Tarefas que vencem em Junho de 2026 (hoje)
+                    status_tarefa = "Pendente"
+                    
+                    nova_tarefa = TarefaDB(
+                        documento_id=doc_id,
+                        empresa_id=emp_id,
+                        titulo=cond.titulo,
+                        descricao=f"Condicionante periódica de {cond.titulo} vinculada ao documento {template.nome_documento}.",
+                        tipo_id="checklist_interno",
+                        cliente_executa=cond.cliente_executa,
+                        status=status_tarefa,
+                        responsavel_id=resp_id,
+                        data_vencimento=data_corrente,
+                        valor_estimado=cond.valor_sugerido,
+                        periodicidade=periodicidade,
+                        historico_observacoes=[
+                            HistoricoObservacao(
+                                usuario_id=admin_id,
+                                texto="Gerada automaticamente pelo seeder operacional."
+                            )
+                        ]
+                    )
+                    tarefas_empresa.append(nova_tarefa.model_dump(by_alias=True, exclude={"id"}))
+                    data_corrente = add_months(data_corrente, freq)
+                    
+            if tarefas_empresa:
+                await db.tarefas.insert_many(tarefas_empresa)
+                total_tarefas += len(tarefas_empresa)
+                
+        # Adiciona uma tarefa avulsa diária ou semanal para enriquecer a agenda
+        data_hoje = datetime.utcnow()
+        t_extra = TarefaDB(
             documento_id=None,
-            empresa_id=empresa_id,
-            titulo="Controle Diário de Temperatura de Freezers",
-            descricao="Verificar e registrar a temperatura dos freezers de armazenamento de alimentos.",
+            empresa_id=emp_id,
+            titulo=f"Checklist Diário Operacional - {emp['fantasia']}",
+            descricao=f"Controle interno diário de conformidade e boas práticas.",
             tipo_id="checklist_interno",
             cliente_executa=True,
             status="Pendente",
@@ -223,36 +304,20 @@ async def run_seed():
             data_vencimento=data_hoje,
             valor_estimado=0.0,
             periodicidade="Diária",
-            historico_observacoes=[HistoricoObservacao(usuario_id=admin_id, texto="Tarefa diária adicionada para controle interno.")]
-        ),
-        TarefaDB(
-            documento_id=None,
-            empresa_id=empresa_id,
-            titulo="Higienização de Reservatórios de Cozinha",
-            descricao="Limpeza e desinfecção semanal das caixas e reservatórios de água da cozinha principal.",
-            tipo_id="checklist_interno",
-            cliente_executa=True,
-            status="Pendente",
-            responsavel_id=cliente_id,
-            data_vencimento=data_hoje,
-            valor_estimado=0.0,
-            periodicidade="Semanal",
-            historico_observacoes=[HistoricoObservacao(usuario_id=admin_id, texto="Tarefa semanal adicionada para conformidade sanitária.")]
+            historico_observacoes=[HistoricoObservacao(usuario_id=admin_id, texto="Tarefa diária gerada automaticamente para o cliente.")]
         )
-    ]
-    for t_extra in tarefas_extras:
-        tarefas_geradas.append(t_extra.model_dump(by_alias=True, exclude={"id"}))
+        await db.tarefas.insert_one(t_extra.model_dump(by_alias=True, exclude={"id"}))
+        total_tarefas += 1
 
-            
-    if tarefas_geradas:
-        await db.tarefas.insert_many(tarefas_geradas)
-        print(f"-> {len(tarefas_geradas)} tarefas condicionantes futuras inseridas com sucesso.")
-        
     print("\nBanco de dados populado com sucesso!")
-    print("Usuários para teste:")
+    print(f"-> Total de Empresas Cadastradas: {len(empresas_dados)}")
+    print(f"-> Total de Documentos Gerados: {total_docs}")
+    print(f"-> Total de Tarefas/Condicionantes Inseridas: {total_tarefas}")
+    print("\nCredenciais de Login de Teste:")
     print("1. Administrador: admin@consultoria.com.br / admin123")
-    print("2. Consultor: roberto@consultoria.com.br / roberto123")
-    print("3. Cliente: cliente@alpha.com.br / cliente123")
+    print("2. Consultor Técnico: roberto@consultoria.com.br / roberto123")
+    print("3. Clientes das Empresas: cliente@<slug_da_empresa>.com.br / cliente123")
+    print("   Exemplo (Alpha Foods): cliente@alpha.com.br / cliente123")
     
     client.close()
 
