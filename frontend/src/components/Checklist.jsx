@@ -488,6 +488,7 @@ const styles = {
     gap: '1.5rem',
     alignItems: 'flex-start',
     width: '100%',
+    flexWrap: 'wrap',
   },
   tablePanel: {
     flex: 1,
@@ -554,12 +555,13 @@ const styles = {
     background: 'rgba(255,255,255,0.4)',
   },
   drawer: {
-    width: '380px',
-    padding: '1.75rem',
+    width: '100%',
+    maxWidth: '380px',
+    padding: '1.5rem',
     textAlign: 'left',
     display: 'flex',
     flexDirection: 'column',
-    maxHeight: '750px',
+    maxHeight: '80vh',
     overflowY: 'auto',
   },
   drawerHeader: {

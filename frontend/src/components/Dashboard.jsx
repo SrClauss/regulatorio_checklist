@@ -152,10 +152,7 @@ export default function Dashboard({ user }) {
       </section>
 
       {/* Gráfico & Alertas Secundários */}
-      <section style={{
-        ...styles.mainSection,
-        gridTemplateColumns: user.role === 'admin' ? '2fr 1.25fr' : '1fr'
-      }}>
+      <section className="dashboard-main-section">
         {/* Gráfico de Barras Pure CSS (Apenas Admin) */}
         {user.role === 'admin' && (
           <div className="glass-panel" style={styles.chartPanel}>
@@ -206,7 +203,7 @@ export default function Dashboard({ user }) {
         <div style={{
           ...styles.alertsPanelGroup,
           display: user.role === 'admin' ? 'flex' : 'grid',
-          gridTemplateColumns: user.role === 'admin' ? '1fr' : 'repeat(auto-fit, minmax(450px, 1fr))',
+          gridTemplateColumns: user.role === 'admin' ? '1fr' : 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))',
           gap: '1.5rem'
         }}>
           {/* Tarefas */}
