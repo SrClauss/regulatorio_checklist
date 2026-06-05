@@ -2,7 +2,7 @@ import asyncio
 import os
 import sys
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Adiciona o diretório atual ao path para resolver os imports de 'app'
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -27,7 +27,7 @@ def add_months(sourcedate: datetime, months: int) -> datetime:
     return datetime(year, month, day, sourcedate.hour, sourcedate.minute, sourcedate.second)
 
 async def run_seed():
-    print("Iniciando o Seeder do Banco de Dados Expandido (21 Empresas)...")
+    print("Iniciando o Seeder do Banco de Dados com Distribuição Realista...")
     client = AsyncIOMotorClient(settings.MONGODB_URI)
     db = client[settings.DB_NAME]
     
@@ -186,13 +186,12 @@ async def run_seed():
     ]
     
     default_client_pw = get_password_hash("cliente123")
+    hoje = datetime.utcnow()
     
     total_tarefas = 0
     total_docs = 0
     
-    data_emissao = datetime(2026, 6, 1)
-    
-    print("\nProcessando cadastro das 21 empresas, clientes e licenças...")
+    print("\nProcessando cadastro das 21 empresas com distribuição realista de prazos...")
     
     for idx, emp in enumerate(empresas_dados):
         # 1. Cria Empresa
@@ -212,7 +211,6 @@ async def run_seed():
         # 2. Cria Usuário Cliente (único para cada empresa)
         slug = re.sub(r'[^a-z0-9]', '', emp["fantasia"].lower())
         cliente_email = f"cliente@{slug}.com.br"
-        # Se for o cliente original da Alpha Foods, mantém a credencial padrão
         if emp["fantasia"] == "Alpha Foods":
             cliente_email = "cliente@alpha.com.br"
             
@@ -227,22 +225,35 @@ async def run_seed():
         cliente_res = await db.usuarios.insert_one(cliente_db.model_dump(by_alias=True, exclude={"id"}))
         cliente_id = cliente_res.inserted_id
         
-        # 3. Cria Documento Regulatório ativo com base no template correspondente
+        # 3. Distribuição de Prazos baseada no índice da empresa
+        # Distribui o dia de vencimento/emissão entre 2 e 28
+        dia_emissao = (idx * 4) % 26 + 2
+        # Distribui a retroatividade de emissão (entre 1 e 18 meses atrás)
+        meses_retroativos = (idx * 5) % 18
+        
+        # Calcula data de emissão retroativa distribuída
+        ano_emissao = hoje.year - (1 if meses_retroativos >= hoje.month else 0)
+        mes_emissao = (hoje.month - meses_retroativos - 1) % 12 + 1
+        data_emissao_emp = datetime(ano_emissao, mes_emissao, dia_emissao)
+        
         segmento = emp["seg"]
         if segmento in templates_dict:
             _, template = templates_dict[segmento]
             
             validade_meses = template.validade_meses_padrao
-            data_vencimento = add_months(data_emissao, validade_meses)
+            data_vencimento_emp = add_months(data_emissao_emp, validade_meses)
+            
+            # Status do documento principal
+            status_doc = "Ativo" if data_vencimento_emp > hoje else "Vencido"
             
             doc_db = DocumentoDB(
                 empresa_id=emp_id,
                 tipo=template.nome_documento,
                 orgao=f"Órgão Regulador {segmento}",
                 numero_processo=f"2026/{segmento[:3].upper()}-{idx:03d}A",
-                data_emissao=data_emissao,
-                data_vencimento=data_vencimento,
-                status="Ativo",
+                data_emissao=data_emissao_emp,
+                data_vencimento=data_vencimento_emp,
+                status=status_doc,
                 valor_renovacao=template.valor_renovacao_sugerido,
                 responsavel_renovacao_id=consultor_id
             )
@@ -254,15 +265,18 @@ async def run_seed():
             tarefas_empresa = []
             for cond in template.condicionantes_sugeridas:
                 freq = cond.frequencia_meses
-                data_corrente = add_months(data_emissao, freq)
+                data_corrente = add_months(data_emissao_emp, freq)
                 periodicidade = "Mensal" if freq == 1 else "Outra"
                 
-                while data_corrente <= data_vencimento:
+                while data_corrente <= data_vencimento_emp:
                     resp_id = cliente_id if cond.cliente_executa else consultor_id
                     
-                    # Para dar realismo, algumas tarefas passadas ou próximas podem estar Concluídas ou Pendentes
-                    # Tarefas que vencem em Junho de 2026 (hoje)
-                    status_tarefa = "Pendente"
+                    # Determina o status com base na data da condicionante (se é passada ou futura)
+                    if data_corrente < hoje:
+                        status_tarefa = "Concluído"
+                    else:
+                        # Próximas tarefas (vencendo em breve) ficam em andamento
+                        status_tarefa = "Em Andamento" if (data_corrente - hoje).days < 20 else "Pendente"
                     
                     nova_tarefa = TarefaDB(
                         documento_id=doc_id,
@@ -279,7 +293,7 @@ async def run_seed():
                         historico_observacoes=[
                             HistoricoObservacao(
                                 usuario_id=admin_id,
-                                texto="Gerada automaticamente pelo seeder operacional."
+                                texto="Gerada automaticamente pelo distribuidor de seed."
                             )
                         ]
                     )
@@ -290,21 +304,24 @@ async def run_seed():
                 await db.tarefas.insert_many(tarefas_empresa)
                 total_tarefas += len(tarefas_empresa)
                 
-        # Adiciona uma tarefa avulsa diária ou semanal para enriquecer a agenda
-        data_hoje = datetime.utcnow()
+        # 5. Adiciona uma tarefa avulsa de rotina distribuída no tempo
+        dias_offset = (idx * 7) % 45 - 15  # Varia de -15 a +30 dias da data atual
+        data_vencimento_extra = hoje + timedelta(days=dias_offset)
+        status_extra = "Concluído" if data_vencimento_extra < hoje else "Pendente"
+        
         t_extra = TarefaDB(
             documento_id=None,
             empresa_id=emp_id,
-            titulo=f"Checklist Diário Operacional - {emp['fantasia']}",
-            descricao=f"Controle interno diário de conformidade e boas práticas.",
+            titulo=f"Checklist de Auditoria Interna - {emp['fantasia']}",
+            descricao=f"Auditoria interna geral e verificação semanal de compliance de rotina.",
             tipo_id="checklist_interno",
             cliente_executa=True,
-            status="Pendente",
+            status=status_extra,
             responsavel_id=cliente_id,
-            data_vencimento=data_hoje,
+            data_vencimento=data_vencimento_extra,
             valor_estimado=0.0,
-            periodicidade="Diária",
-            historico_observacoes=[HistoricoObservacao(usuario_id=admin_id, texto="Tarefa diária gerada automaticamente para o cliente.")]
+            periodicidade="Semanal" if idx % 2 == 0 else "Diária",
+            historico_observacoes=[HistoricoObservacao(usuario_id=admin_id, texto="Tarefa avulsa distribuída cadastrada via Seeder.")]
         )
         await db.tarefas.insert_one(t_extra.model_dump(by_alias=True, exclude={"id"}))
         total_tarefas += 1
@@ -317,7 +334,6 @@ async def run_seed():
     print("1. Administrador: admin@consultoria.com.br / admin123")
     print("2. Consultor Técnico: roberto@consultoria.com.br / roberto123")
     print("3. Clientes das Empresas: cliente@<slug_da_empresa>.com.br / cliente123")
-    print("   Exemplo (Alpha Foods): cliente@alpha.com.br / cliente123")
     
     client.close()
 
