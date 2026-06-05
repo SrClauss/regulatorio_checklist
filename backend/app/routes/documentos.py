@@ -76,6 +76,7 @@ async def create_document(
                         data_vencimento=data_vencimento,
                         valor_estimado=cond.get("valor_sugerido", 0.0),
                         periodicidade=periodicidade,
+                        e_pre_requisito=cond.get("e_pre_requisito", False),
                         historico_observacoes=[
                             HistoricoObservacao(
                                 usuario_id=current_user.id,
@@ -104,6 +105,7 @@ async def create_document(
                             data_vencimento=data_corrente,
                             valor_estimado=cond.get("valor_sugerido", 0.0),
                             periodicidade=periodicidade,
+                            e_pre_requisito=cond.get("e_pre_requisito", False),
                             historico_observacoes=[
                                 HistoricoObservacao(
                                     usuario_id=current_user.id,
@@ -271,6 +273,10 @@ async def renew_document(
                     responsavel_cliente_id = cliente_user["_id"]
             
             for cond in template.get("condicionantes_sugeridas", []):
+                # Se for pré-requisito, NÃO regera a tarefa como Pendente no novo ciclo
+                if cond.get("e_pre_requisito", False):
+                    continue
+
                 freq = cond.get("frequencia_meses", 0)
                 periodicidade = "Mensal" if freq == 1 else "Outra"
                 if freq == 0:
@@ -286,6 +292,7 @@ async def renew_document(
                         data_vencimento=renovacao.data_vencimento,
                         valor_estimado=cond.get("valor_sugerido", 0.0),
                         periodicidade=periodicidade,
+                        e_pre_requisito=False,
                         historico_observacoes=[
                             HistoricoObservacao(
                                 usuario_id=current_user.id,
@@ -309,6 +316,7 @@ async def renew_document(
                             data_vencimento=data_corrente,
                             valor_estimado=cond.get("valor_sugerido", 0.0),
                             periodicidade=periodicidade,
+                            e_pre_requisito=False,
                             historico_observacoes=[
                                 HistoricoObservacao(
                                     usuario_id=current_user.id,

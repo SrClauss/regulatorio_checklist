@@ -279,6 +279,15 @@ export default function CondicionanteDetail({ taskId, user, onBack, onGoToCompan
                   {task.responsavel_id ? getUsuarioNome(task.responsavel_id) : 'Nenhum responsável atribuído'}
                 </span>
               </div>
+
+              {task.e_pre_requisito && (
+                <div style={{ ...styles.infoField, background: 'rgba(37, 99, 235, 0.05)', padding: '0.5rem 0.75rem', borderRadius: '8px', borderLeft: '3px solid var(--primary)', marginTop: '0.25rem' }}>
+                  <span style={{ fontSize: '0.65rem', fontWeight: '700', color: 'var(--primary)', textTransform: 'uppercase' }}>Condicionante Pré-requisito</span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.15rem', lineHeight: '1.3' }}>
+                    Esta atividade é pré-requisito obrigatório de renovação e permanecerá concluída no próximo ciclo de renovação.
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 

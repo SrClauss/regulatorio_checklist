@@ -23,6 +23,7 @@ class TarefaBase(BaseModel):
     comprovante_url: Optional[str] = None
     periodicidade: str = Field(default="Mensal", description="Diária, Semanal, Mensal, Outra")
     historico_observacoes: List[HistoricoObservacao] = Field(default_factory=list)
+    e_pre_requisito: bool = Field(default=False, description="Se True, é pré-requisito para renovação e não deve ser resetada como Pendente ao renovar")
 
 class TarefaCreate(TarefaBase):
     pass
@@ -42,6 +43,7 @@ class TarefaUpdate(BaseModel):
     comprovante_url: Optional[str] = None
     periodicidade: Optional[str] = None
     historico_observacoes: Optional[List[HistoricoObservacao]] = None
+    e_pre_requisito: Optional[bool] = None
 
 class TarefaResponse(MongoBaseModel, TarefaBase):
     pass

@@ -7,6 +7,7 @@ class CondicionanteSugerida(BaseModel):
     frequencia_meses: int = Field(..., description="Frequência em meses (1=Mensal, 3=Trimestral, 6=Semestral, 12=Anual, 0=Única)")
     cliente_executa: bool = Field(default=False, description="True se deve ser feita pelo cliente no módulo empresa, False se é interna da consultoria")
     valor_sugerido: float = Field(default=0.0, description="Preço padrão sugerido para a execução desta condicionante")
+    e_pre_requisito: bool = Field(default=False, description="Se True, é pré-requisito para renovação e não deve ser resetada como Pendente ao renovar")
 
 class TemplateDocumentoBase(BaseModel):
     segmento: str = Field(..., description="Segmento aplicável, ex: Alimentos, Posto, Saúde")

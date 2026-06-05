@@ -15,7 +15,7 @@ export default function Cadastros({ user }) {
   const [empresaForm, setEmpresaForm] = useState({ razao_social: '', nome_fantasia: '', cnpj: '', cidade: '', uf: 'SP', segmento: 'Farmácia', responsavel_principal_id: '' });
   const [docForm, setDocForm] = useState({ empresa_id: '', tipo: '', orgao: '', numero_processo: '', data_emissao: '', data_vencimento: '', status: 'Ativo', valor_renovacao: 0.0, responsavel_renovacao_id: '', template_id: '' });
   const [templateForm, setTemplateForm] = useState({ segmento: 'Farmácia', nome_documento: '', validade_meses_padrao: 12, valor_renovacao_sugerido: 0.0 });
-  const [condicionantesSugeridas, setCondicionantesSugeridas] = useState([{ titulo: '', frequencia_meses: 1, cliente_executa: false, valor_sugerido: 0.0 }]);
+  const [condicionantesSugeridas, setCondicionantesSugeridas] = useState([{ titulo: '', frequencia_meses: 1, cliente_executa: false, valor_sugerido: 0.0, e_pre_requisito: false }]);
   
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -125,7 +125,7 @@ export default function Cadastros({ user }) {
       await api.createTemplate(payload);
       showFeedback(true, 'Template de documento cadastrado com sucesso!');
       setTemplateForm({ segmento: 'Farmácia', nome_documento: '', validade_meses_padrao: 12, valor_renovacao_sugerido: 0.0 });
-      setCondicionantesSugeridas([{ titulo: '', frequencia_meses: 1, cliente_executa: false, valor_sugerido: 0.0 }]);
+      setCondicionantesSugeridas([{ titulo: '', frequencia_meses: 1, cliente_executa: false, valor_sugerido: 0.0, e_pre_requisito: false }]);
       fetchDados();
     } catch (err) {
       showFeedback(false, err.message || 'Erro ao cadastrar template.');
@@ -136,7 +136,7 @@ export default function Cadastros({ user }) {
 
   // Manipuladores de condicionantes dinâmicas do template
   const handleAddCondicionante = () => {
-    setCondicionantesSugeridas([...condicionantesSugeridas, { titulo: '', frequencia_meses: 1, cliente_executa: false, valor_sugerido: 0.0 }]);
+    setCondicionantesSugeridas([...condicionantesSugeridas, { titulo: '', frequencia_meses: 1, cliente_executa: false, valor_sugerido: 0.0, e_pre_requisito: false }]);
   };
 
   const handleCondicionanteChange = (index, field, val) => {
@@ -421,6 +421,11 @@ export default function Cadastros({ user }) {
                     <div className="glass-input-group" style={{ flex: 1, justifyContent: 'center' }}>
                       <label className="glass-label">Cliente Executa?</label>
                       <input type="checkbox" checked={cond.cliente_executa} onChange={e => handleCondicionanteChange(idx, 'cliente_executa', e.target.checked)} style={styles.checkbox} />
+                    </div>
+
+                    <div className="glass-input-group" style={{ flex: 1, justifyContent: 'center' }}>
+                      <label className="glass-label">Pré-requisito?</label>
+                      <input type="checkbox" checked={cond.e_pre_requisito || false} onChange={e => handleCondicionanteChange(idx, 'e_pre_requisito', e.target.checked)} style={styles.checkbox} />
                     </div>
                   </div>
 

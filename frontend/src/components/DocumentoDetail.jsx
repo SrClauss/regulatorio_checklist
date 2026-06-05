@@ -176,8 +176,21 @@ export default function DocumentoDetail({ documentId, user, onBack, onGoToCompan
                   <tr key={task._id} style={styles.tableRow} className="table-row-hover">
                     <td style={{ ...styles.td, fontWeight: '550', color: 'var(--text-main)' }}>
                       <div>
-                        <div>{task.titulo}</div>
-                        <span style={styles.taskSubtext}>{task.descricao.substring(0, 80)}...</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                          <span>{task.titulo}</span>
+                          {task.e_pre_requisito && (
+                            <span style={{ 
+                              fontSize: '0.625rem', 
+                              fontWeight: '700', 
+                              color: 'var(--primary)', 
+                              background: 'rgba(37, 99, 235, 0.08)', 
+                              padding: '0.05rem 0.35rem', 
+                              borderRadius: '4px',
+                              textTransform: 'uppercase'
+                            }}>Pré-requisito</span>
+                          )}
+                        </div>
+                        <span style={styles.taskSubtext}>{task.descricao ? task.descricao.substring(0, 80) : ''}...</span>
                       </div>
                     </td>
                     <td style={styles.td}>{task.periodicidade}</td>

@@ -94,3 +94,103 @@ async def test_create_document_and_auto_generate_tasks(client, db, test_consulto
     assert tarefas_unicas[0]["data_vencimento"] == data_vencimento
     assert tarefas_unicas[0]["cliente_executa"] is False
     assert tarefas_unicas[0]["responsavel_id"] == test_consultor["_id"]
+
+
+@pytest.mark.asyncio
+async def test_renew_document_pre_requisite_rule(client, db, test_consultor, test_empresa, admin_headers):
+    """Testa se ao renovar um documento, as condicionantes pré-requisito não são recriadas/resetadas como pendentes,
+    enquanto as comuns são geradas normalmente para o novo ciclo.
+    """
+    # 1. Cria um template com uma condicionante pré-requisito e uma comum
+    template_data = {
+        "segmento": "Alimentos",
+        "nome_documento": "Alvará Sanitário de Teste",
+        "validade_meses_padrao": 12,
+        "valor_renovacao_sugerido": 500.0,
+        "condicionantes_sugeridas": [
+            {
+                "titulo": "Auditoria de Pré-requisito",
+                "frequencia_meses": 0,
+                "cliente_executa": True,
+                "valor_sugerido": 200.0,
+                "e_pre_requisito": True
+            },
+            {
+                "titulo": "Limpeza Trimestral",
+                "frequencia_meses": 3,
+                "cliente_executa": False,
+                "valor_sugerido": 150.0,
+                "e_pre_requisito": False
+            }
+        ]
+    }
+    temp_inserted = await db.templates_documentos.insert_one(template_data)
+    template_id = str(temp_inserted.inserted_id)
+    
+    # 2. Cria documento vencido
+    data_emissao_antiga = datetime(2025, 1, 1)
+    data_vencimento_antiga = datetime(2026, 1, 1)
+    
+    doc_payload = {
+        "empresa_id": str(test_empresa["_id"]),
+        "tipo": "Alvará Sanitário de Teste",
+        "orgao": "VISA",
+        "numero_processo": "PR-123/2025",
+        "data_emissao": data_emissao_antiga.isoformat(),
+        "data_vencimento": data_vencimento_antiga.isoformat(),
+        "status": "Vencido",
+        "valor_renovacao": 500.0,
+        "responsavel_renovacao_id": str(test_consultor["_id"])
+    }
+    
+    response = await client.post(
+        f"/api/documentos?template_id={template_id}", 
+        json=doc_payload, 
+        headers=admin_headers
+    )
+    assert response.status_code == status.HTTP_201_CREATED
+    doc_data = response.json()
+    doc_id = doc_data["_id"]
+    
+    # 3. Simula que a tarefa de pré-requisito foi CONCLUÍDA
+    await db.tarefas.update_one(
+        {"documento_id": ObjectId(doc_id), "titulo": "Auditoria de Pré-requisito"},
+        {"$set": {"status": "Concluído", "data_conclusao": datetime.utcnow()}}
+    )
+    
+    # 4. Faz a renovação do documento (novo ciclo de validade: 2026-01-01 até 2027-01-01)
+    data_emissao_nova = datetime(2026, 1, 1)
+    data_vencimento_nova = datetime(2027, 1, 1)
+    
+    renovar_payload = {
+        "data_emissao": data_emissao_nova.isoformat(),
+        "data_vencimento": data_vencimento_nova.isoformat(),
+        "valor_renovacao": 600.0,
+        "regerar_condicionantes": True
+    }
+    
+    renew_response = await client.post(
+        f"/api/documentos/{doc_id}/renovar",
+        json=renovar_payload,
+        headers=admin_headers
+    )
+    assert renew_response.status_code == status.HTTP_200_OK
+    
+    # 5. Verifica as tarefas finais no banco de dados
+    todas_tarefas = await db.tarefas.find({"documento_id": ObjectId(doc_id)}).to_list(length=100)
+    
+    # - O pré-requisito original concluído deve permanecer concluído
+    prereq_tarefas = [t for t in todas_tarefas if t["titulo"] == "Auditoria de Pré-requisito"]
+    assert len(prereq_tarefas) == 1
+    assert prereq_tarefas[0]["status"] == "Concluído"
+    
+    # - As tarefas comuns do ciclo novo (Limpeza Trimestral) devem ser criadas como pendentes
+    limpeza_tarefas = [t for t in todas_tarefas if t["titulo"] == "Limpeza Trimestral"]
+    # Limpeza trimestral em 12 meses: 4 ocorrências geradas no novo ciclo
+    # Mais as do ciclo antigo que podem ter sido apagadas ou mantidas se concluídas.
+    # Como não simulamos a conclusão da Limpeza Trimestral antiga, ela estava pendente e foi deletada.
+    # Portanto, no banco só devem existir as do novo ciclo (4 ocorrências).
+    assert len(limpeza_tarefas) == 4
+    for t in limpeza_tarefas:
+        assert t["status"] == "Pendente"
+        assert t["e_pre_requisito"] is False
