@@ -47,19 +47,22 @@
   transition: background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease, transform 0.2s ease;
 }
 
+html, body, #root {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
 body {
   font-family: var(--font-body);
   color: var(--text-main);
   background: var(--bg-gradient);
   background-attachment: fixed;
-  min-height: 100vh;
-  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 #root {
-  min-height: 100vh;
   display: flex;
   width: 100%;
 }
@@ -68,7 +71,8 @@ body {
 .app-container {
   display: flex;
   width: 100%;
-  min-height: 100vh;
+  height: 100%;
+  overflow: hidden;
 }
 
 .dashboard-main-section {
@@ -88,6 +92,7 @@ body {
   padding: 2.5rem;
   margin-left: 280px; /* Largura da Sidebar */
   overflow-y: auto;
+  height: 100%;
   max-width: calc(100% - 280px);
 }
 

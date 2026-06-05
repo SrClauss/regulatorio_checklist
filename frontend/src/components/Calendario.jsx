@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api';
-import { ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, Clock, CheckCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, Clock, CheckCircle, ArrowLeft } from 'lucide-react';
 
 export default function Calendario({ user }) {
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [viewMode, setViewMode] = useState('annual'); // 'annual' ou 'monthly'
   const [tarefas, setTarefas] = useState([]);
   const [documentos, setDocumentos] = useState([]);
   const [selectedDayEvents, setSelectedDayEvents] = useState(null);
@@ -34,19 +35,46 @@ export default function Calendario({ user }) {
     'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
   ];
 
-  // Cálculos do calendário
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstDayIndex = new Date(year, month, 1).getDay(); // 0 = Domingo, 1 = Segunda...
+  // Agrupa eventos por mês do ano selecionado
+  const getEventsByMonth = (targetYear) => {
+    const monthsData = Array.from({ length: 12 }, (_, i) => ({
+      monthIndex: i,
+      monthName: monthNames[i],
+      tasks: [],
+      docs: [],
+    }));
 
-  // Gera array dos dias do mês
+    tarefas.forEach(t => {
+      const d = new Date(t.data_vencimento);
+      if (d.getFullYear() === targetYear) {
+        monthsData[d.getMonth()].tasks.push(t);
+      }
+    });
+
+    documentos.forEach(doc => {
+      const d = new Date(doc.data_vencimento);
+      if (d.getFullYear() === targetYear) {
+        monthsData[d.getMonth()].docs.push(doc);
+      }
+    });
+
+    // Ordena por data
+    monthsData.forEach(m => {
+      m.tasks.sort((a, b) => new Date(a.data_vencimento) - new Date(b.data_vencimento));
+      m.docs.sort((a, b) => new Date(a.data_vencimento) - new Date(b.data_vencimento));
+    });
+
+    return monthsData;
+  };
+
+  // Cálculos do calendário mensal
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDayIndex = new Date(year, month, 1).getDay();
+
   const calendarCells = [];
-  
-  // Placeholders para alinhar o primeiro dia do mês na semana correta
   for (let i = 0; i < firstDayIndex; i++) {
     calendarCells.push(null);
   }
-  
-  // Dias normais
   for (let d = 1; d <= daysInMonth; d++) {
     calendarCells.push(new Date(year, month, d));
   }
@@ -61,15 +89,11 @@ export default function Calendario({ user }) {
     setSelectedDayEvents(null);
   };
 
-  // Encontra eventos cadastrados para uma determinada data
   const getEventsForDate = (date) => {
     if (!date) return { tasks: [], docs: [] };
-    
     const targetStr = date.toDateString();
-    
     const dayTasks = tarefas.filter(t => new Date(t.data_vencimento).toDateString() === targetStr);
     const dayDocs = documentos.filter(d => new Date(d.data_vencimento).toDateString() === targetStr);
-    
     return { tasks: dayTasks, docs: dayDocs };
   };
 
@@ -93,153 +117,240 @@ export default function Calendario({ user }) {
     );
   }
 
+  const groupedEvents = getEventsByMonth(year);
+
   return (
     <div className="animate-fade-in" style={styles.container}>
       <header style={styles.header}>
         <div style={styles.titleArea}>
           <CalendarIcon size={28} color="var(--primary)" />
           <div>
-            <h1 style={styles.title}>Calendário de Vencimentos</h1>
-            <p style={styles.subtitle}>Acompanhe prazos e execute as auditorias dos processos.</p>
+            <h1 style={styles.title}>
+              {viewMode === 'annual' ? `Cronograma Anual - ${year}` : 'Calendário de Vencimentos'}
+            </h1>
+            <p style={styles.subtitle}>
+              {viewMode === 'annual' 
+                ? 'Acompanhe a linha de tempo anual dos seus alvarás e condicionantes.' 
+                : 'Acompanhe prazos e execute as auditorias dos processos.'}
+            </p>
           </div>
         </div>
 
-        {/* Controles de navegação de meses */}
-        <div style={styles.controls} className="glass-card">
-          <button onClick={handlePrevMonth} style={styles.arrowBtn}>
-            <ChevronLeft size={20} />
-          </button>
-          <span style={styles.monthLabel}>{monthNames[month]} {year}</span>
-          <button onClick={handleNextMonth} style={styles.arrowBtn}>
-            <ChevronRight size={20} />
-          </button>
-        </div>
-      </header>
-
-      <div style={styles.mainLayout}>
-        {/* Grade do Calendário */}
-        <div className="glass-panel" style={styles.calendarPanel}>
-          {/* Cabeçalho dos dias da semana */}
-          <div style={styles.weekHeader}>
-            <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span>
+        {/* Controles de Navegação */}
+        {viewMode === 'annual' ? (
+          <div style={styles.controls} className="glass-card">
+            <button onClick={() => setCurrentDate(new Date(year - 1, month, 1))} style={styles.arrowBtn}>
+              <ChevronLeft size={20} />
+            </button>
+            <span style={styles.monthLabel}>{year}</span>
+            <button onClick={() => setCurrentDate(new Date(year + 1, month, 1))} style={styles.arrowBtn}>
+              <ChevronRight size={20} />
+            </button>
           </div>
-
-          <div style={styles.grid}>
-            {calendarCells.map((cell, index) => {
-              if (cell === null) {
-                return <div key={`empty-${index}`} style={styles.emptyCell}></div>;
-              }
-
-              const { tasks, docs } = getEventsForDate(cell);
-              const hasEvents = tasks.length > 0 || docs.length > 0;
-              const isToday = cell.toDateString() === new Date().toDateString();
-
-              return (
-                <button
-                  key={`day-${cell.getDate()}`}
-                  onClick={() => handleDayClick(cell)}
-                  style={{
-                    ...styles.dayCell,
-                    ...(isToday ? styles.todayCell : {}),
-                    ...(hasEvents ? styles.eventfulCell : {})
-                  }}
-                >
-                  <span style={{
-                    ...styles.dayNumber,
-                    ...(isToday ? styles.todayNumber : {})
-                  }}>
-                    {cell.getDate()}
-                  </span>
-
-                  {/* Dot indicators para eventos na data */}
-                  <div style={styles.dotContainer}>
-                    {docs.map((d, i) => (
-                      <div key={`d-dot-${i}`} style={{ ...styles.dot, background: 'var(--danger)' }} title="Documento a vencer"></div>
-                    ))}
-                    {tasks.map((t, i) => (
-                      <div 
-                        key={`t-dot-${i}`} 
-                        style={{ 
-                          ...styles.dot, 
-                          background: t.status === 'Concluído' ? 'var(--success)' : 'var(--warning)' 
-                        }} 
-                        title="Condicionante"
-                      ></div>
-                    ))}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Drawer lateral de eventos selecionados */}
-        {selectedDayEvents && (
-          <div className="glass-panel animate-fade-in" style={styles.drawer}>
-            <div style={styles.drawerHeader}>
-              <h3 style={styles.drawerTitle}>Prazos do Dia</h3>
-              <button onClick={() => setSelectedDayEvents(null)} style={styles.closeBtn}>
-                <X size={18} />
-              </button>
-            </div>
-            <span style={styles.drawerDate}>{selectedDateLabel}</span>
-
-            <div style={styles.drawerContent}>
-              {/* Documentos */}
-              {selectedDayEvents.docs.length > 0 && (
-                <div style={styles.eventSection}>
-                  <h4 style={styles.sectionTitle}>Licenças & Documentos ({selectedDayEvents.docs.length})</h4>
-                  <div style={styles.eventList}>
-                    {selectedDayEvents.docs.map(doc => (
-                      <div key={doc._id} style={{ ...styles.eventCard, borderLeft: '4px solid var(--danger)' }}>
-                        <span style={styles.eventCardTitle}>{doc.tipo}</span>
-                        <span style={styles.eventCardSub}>Órgão: {doc.orgao}</span>
-                        <span style={styles.eventCardSub}>Processo: {doc.numero_processo || 'Não informado'}</span>
-                        <span style={styles.eventCardSub}>Status: {doc.status}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Tarefas */}
-              {selectedDayEvents.tasks.length > 0 && (
-                <div style={styles.eventSection}>
-                  <h4 style={styles.sectionTitle}>Condicionantes ({selectedDayEvents.tasks.length})</h4>
-                  <div style={styles.eventList}>
-                    {selectedDayEvents.tasks.map(task => (
-                      <div 
-                        key={task._id} 
-                        style={{ 
-                          ...styles.eventCard, 
-                          borderLeft: `4px solid ${task.status === 'Concluído' ? 'var(--success)' : 'var(--warning)'}` 
-                        }}
-                      >
-                        <span style={styles.eventCardTitle}>{task.titulo}</span>
-                        <p style={styles.eventCardDesc}>{task.descricao}</p>
-                        <div style={styles.eventCardFooter}>
-                          <span style={styles.eventCardSub}>
-                            {task.status === 'Concluído' ? (
-                              <span style={{ color: 'var(--success)', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
-                                <CheckCircle size={12} /> Concluído
-                              </span>
-                            ) : (
-                              <span style={{ color: 'var(--warning)', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
-                                <Clock size={12} /> {task.status}
-                              </span>
-                            )}
-                          </span>
-                          <span style={styles.eventCardPrice}>R$ {task.valor_estimado}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+        ) : (
+          <div style={styles.controls} className="glass-card">
+            <button 
+              onClick={() => { setViewMode('annual'); setSelectedDayEvents(null); }} 
+              style={{ ...styles.arrowBtn, marginRight: '0.5rem', display: 'flex', gap: '0.25rem', alignItems: 'center' }} 
+              title="Voltar ao Cronograma"
+            >
+              <ArrowLeft size={16} /> <span style={{ fontSize: '0.85rem', fontWeight: '600' }}>Cronograma</span>
+            </button>
+            <div style={{ height: '20px', width: '1px', background: 'var(--glass-border)', marginRight: '0.5rem' }}></div>
+            <button onClick={handlePrevMonth} style={styles.arrowBtn}>
+              <ChevronLeft size={20} />
+            </button>
+            <span style={styles.monthLabel}>{monthNames[month]}</span>
+            <button onClick={handleNextMonth} style={styles.arrowBtn}>
+              <ChevronRight size={20} />
+            </button>
           </div>
         )}
-      </div>
+      </header>
+
+      {/* Renderização condicional de visualização */}
+      {viewMode === 'annual' ? (
+        <div style={styles.timelineContainer}>
+          {groupedEvents.map((monthData) => {
+            const totalEvents = monthData.tasks.length + monthData.docs.length;
+            return (
+              <div 
+                key={monthData.monthIndex} 
+                className="glass-card timeline-month-card" 
+                style={styles.timelineMonthCard}
+                onClick={() => {
+                  setCurrentDate(new Date(year, monthData.monthIndex, 1));
+                  setViewMode('monthly');
+                }}
+              >
+                <div style={styles.timelineMonthHeader}>
+                  <h3 style={styles.timelineMonthName}>{monthData.monthName}</h3>
+                  <span style={{
+                    ...styles.eventBadge,
+                    background: totalEvents > 0 ? 'var(--primary-light)' : 'rgba(255,255,255,0.3)',
+                    color: totalEvents > 0 ? 'var(--primary)' : 'var(--text-muted)'
+                  }}>
+                    {totalEvents} {totalEvents === 1 ? 'prazo' : 'prazos'}
+                  </span>
+                </div>
+                
+                <div style={styles.timelineMonthEvents}>
+                  {totalEvents === 0 ? (
+                    <span style={styles.noEventsText}>Nenhum vencimento agendado</span>
+                  ) : (
+                    <div style={styles.miniEventList}>
+                      {monthData.docs.slice(0, 2).map((doc, idx) => (
+                        <div key={`doc-${idx}`} style={styles.miniEventItem}>
+                          <span style={{ ...styles.miniEventDot, background: 'var(--danger)' }}></span>
+                          <span style={styles.miniEventTitle} title={doc.tipo}>Licença: {doc.tipo}</span>
+                          <span style={styles.miniEventDate}>{new Date(doc.data_vencimento).getDate()}</span>
+                        </div>
+                      ))}
+                      {monthData.tasks.slice(0, 2).map((task, idx) => (
+                        <div key={`task-${idx}`} style={styles.miniEventItem}>
+                          <span style={{ 
+                            ...styles.miniEventDot, 
+                            background: task.status === 'Concluído' ? 'var(--success)' : 'var(--warning)' 
+                          }}></span>
+                          <span style={styles.miniEventTitle} title={task.titulo}>Condic: {task.titulo}</span>
+                          <span style={styles.miniEventDate}>{new Date(task.data_vencimento).getDate()}</span>
+                        </div>
+                      ))}
+                      {totalEvents > 4 && (
+                        <span style={styles.moreEventsText}>+ {totalEvents - 4} outros prazos...</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div style={styles.clickToExpand}>Ver detalhes no calendário</div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div style={styles.mainLayout}>
+          {/* Grade do Calendário Mensal */}
+          <div className="glass-panel" style={styles.calendarPanel}>
+            <div style={styles.weekHeader}>
+              <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span>
+            </div>
+
+            <div style={styles.grid}>
+              {calendarCells.map((cell, index) => {
+                if (cell === null) {
+                  return <div key={`empty-${index}`} style={styles.emptyCell}></div>;
+                }
+
+                const { tasks, docs } = getEventsForDate(cell);
+                const hasEvents = tasks.length > 0 || docs.length > 0;
+                const isToday = cell.toDateString() === new Date().toDateString();
+
+                return (
+                  <button
+                    key={`day-${cell.getDate()}`}
+                    onClick={() => handleDayClick(cell)}
+                    style={{
+                      ...styles.dayCell,
+                      ...(isToday ? styles.todayCell : {}),
+                      ...(hasEvents ? styles.eventfulCell : {})
+                    }}
+                  >
+                    <span style={{
+                      ...styles.dayNumber,
+                      ...(isToday ? styles.todayNumber : {})
+                    }}>
+                      {cell.getDate()}
+                    </span>
+
+                    <div style={styles.dotContainer}>
+                      {docs.map((d, i) => (
+                        <div key={`d-dot-${i}`} style={{ ...styles.dot, background: 'var(--danger)' }} title="Documento a vencer"></div>
+                      ))}
+                      {tasks.map((t, i) => (
+                        <div 
+                          key={`t-dot-${i}`} 
+                          style={{ 
+                            ...styles.dot, 
+                            background: t.status === 'Concluído' ? 'var(--success)' : 'var(--warning)' 
+                          }} 
+                          title="Condicionante"
+                        ></div>
+                      ))}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Drawer lateral de eventos selecionados */}
+          {selectedDayEvents && (
+            <div className="glass-panel animate-fade-in" style={styles.drawer}>
+              <div style={styles.drawerHeader}>
+                <h3 style={styles.drawerTitle}>Prazos do Dia</h3>
+                <button onClick={() => setSelectedDayEvents(null)} style={styles.closeBtn}>
+                  <X size={18} />
+                </button>
+              </div>
+              <span style={styles.drawerDate}>{selectedDateLabel}</span>
+
+              <div style={styles.drawerContent}>
+                {/* Documentos */}
+                {selectedDayEvents.docs.length > 0 && (
+                  <div style={styles.eventSection}>
+                    <h4 style={styles.sectionTitle}>Licenças & Documentos ({selectedDayEvents.docs.length})</h4>
+                    <div style={styles.eventList}>
+                      {selectedDayEvents.docs.map(doc => (
+                        <div key={doc._id} style={{ ...styles.eventCard, borderLeft: '4px solid var(--danger)' }}>
+                          <span style={styles.eventCardTitle}>{doc.tipo}</span>
+                          <span style={styles.eventCardSub}>Órgão: {doc.orgao}</span>
+                          <span style={styles.eventCardSub}>Processo: {doc.numero_processo || 'Não informado'}</span>
+                          <span style={styles.eventCardSub}>Status: {doc.status}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Tarefas */}
+                {selectedDayEvents.tasks.length > 0 && (
+                  <div style={styles.eventSection}>
+                    <h4 style={styles.sectionTitle}>Condicionantes ({selectedDayEvents.tasks.length})</h4>
+                    <div style={styles.eventList}>
+                      {selectedDayEvents.tasks.map(task => (
+                        <div 
+                          key={task._id} 
+                          style={{ 
+                            ...styles.eventCard, 
+                            borderLeft: `4px solid ${task.status === 'Concluído' ? 'var(--success)' : 'var(--warning)'}` 
+                          }}
+                        >
+                          <span style={styles.eventCardTitle}>{task.titulo}</span>
+                          <p style={styles.eventCardDesc}>{task.descricao}</p>
+                          <div style={styles.eventCardFooter}>
+                            <span style={styles.eventCardSub}>
+                              {task.status === 'Concluído' ? (
+                                <span style={{ color: 'var(--success)', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                                  <CheckCircle size={12} /> Concluído
+                                </span>
+                              ) : (
+                                <span style={{ color: 'var(--warning)', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                                  <Clock size={12} /> {task.status}
+                                </span>
+                              )}
+                            </span>
+                            <span style={styles.eventCardPrice}>R$ {task.valor_estimado}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -249,6 +360,7 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     gap: '2rem',
+    width: '100%',
   },
   header: {
     display: 'flex',
@@ -290,18 +402,108 @@ const styles = {
     fontFamily: 'var(--font-heading)',
     fontSize: '1rem',
     fontWeight: '600',
-    minWidth: '130px',
+    minWidth: '100px',
     textAlign: 'center',
+  },
+  timelineContainer: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+    gap: '1.25rem',
+    width: '100%',
+  },
+  timelineMonthCard: {
+    cursor: 'pointer',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+    padding: '1.25rem',
+    minHeight: '185px',
+    textAlign: 'left',
+    transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+  },
+  timelineMonthHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '1rem',
+  },
+  timelineMonthName: {
+    fontSize: '1.1rem',
+    fontWeight: '700',
+    color: 'var(--text-main)',
+  },
+  eventBadge: {
+    fontSize: '0.75rem',
+    fontWeight: '600',
+    padding: '0.25rem 0.5rem',
+    borderRadius: '6px',
+  },
+  timelineMonthEvents: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.5rem',
+  },
+  noEventsText: {
+    fontSize: '0.8rem',
+    color: 'var(--text-light)',
+    fontStyle: 'italic',
+  },
+  miniEventList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.4rem',
+  },
+  miniEventItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    fontSize: '0.8rem',
+    color: 'var(--text-muted)',
+  },
+  miniEventDot: {
+    width: '6px',
+    height: '6px',
+    borderRadius: '50%',
+    flexShrink: 0,
+  },
+  miniEventTitle: {
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    flex: 1,
+    textAlign: 'left',
+  },
+  miniEventDate: {
+    fontSize: '0.75rem',
+    color: 'var(--text-light)',
+    flexShrink: 0,
+  },
+  moreEventsText: {
+    fontSize: '0.75rem',
+    color: 'var(--primary)',
+    fontWeight: '500',
+    textAlign: 'left',
+  },
+  clickToExpand: {
+    fontSize: '0.7rem',
+    color: 'var(--text-light)',
+    textAlign: 'right',
+    marginTop: '0.75rem',
+    borderTop: '1px solid var(--glass-border)',
+    paddingTop: '0.5rem',
   },
   mainLayout: {
     display: 'flex',
     gap: '1.5rem',
     alignItems: 'flex-start',
     width: '100%',
+    flexWrap: 'wrap',
   },
   calendarPanel: {
     flex: 1,
     padding: '1.5rem',
+    minWidth: '280px',
   },
   weekHeader: {
     display: 'grid',
@@ -335,9 +537,6 @@ const styles = {
     justifyContent: 'space-between',
     padding: '0.5rem',
   },
-  dayCellHover: {
-    background: 'var(--glass-bg-hover)',
-  },
   todayCell: {
     background: 'rgba(37, 99, 235, 0.06)',
     borderColor: 'var(--primary)',
@@ -368,12 +567,13 @@ const styles = {
     borderRadius: '50%',
   },
   drawer: {
-    width: '340px',
+    width: '100%',
+    maxWidth: '340px',
     padding: '1.5rem',
     textAlign: 'left',
     display: 'flex',
     flexDirection: 'column',
-    maxHeight: '600px',
+    maxHeight: '80vh',
     overflowY: 'auto',
   },
   drawerHeader: {
