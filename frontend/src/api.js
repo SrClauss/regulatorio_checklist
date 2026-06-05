@@ -108,12 +108,24 @@ export const api = {
 
   // Documentos
   async listDocumentos() {
-    const response = await fetch(`${API_BASE_URL}/api/documentos`, {
-      method: 'GET',
-      headers: getHeaders(),
-    });
-    if (!response.ok) throw new Error('Falha ao listar documentos');
-    return response.json();
+    const cacheKey = 'cached_documents';
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/documentos`, {
+        method: 'GET',
+        headers: getHeaders(),
+      });
+      if (!response.ok) throw new Error('Falha ao listar documentos');
+      const data = await response.json();
+      localStorage.setItem(cacheKey, JSON.stringify(data));
+      return data;
+    } catch (error) {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        console.warn('Utilizando documentos do cache offline.');
+        return JSON.parse(cached);
+      }
+      throw error;
+    }
   },
 
   async createDocumento(data, templateId = null) {
@@ -143,12 +155,24 @@ export const api = {
     if (filters.data_inicio) params.append('data_inicio', filters.data_inicio);
     if (filters.data_fim) params.append('data_fim', filters.data_fim);
 
-    const response = await fetch(`${API_BASE_URL}/api/tarefas?${params.toString()}`, {
-      method: 'GET',
-      headers: getHeaders(),
-    });
-    if (!response.ok) throw new Error('Falha ao listar tarefas');
-    return response.json();
+    const cacheKey = `cached_tasks_${params.toString()}`;
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/tarefas?${params.toString()}`, {
+        method: 'GET',
+        headers: getHeaders(),
+      });
+      if (!response.ok) throw new Error('Falha ao listar tarefas');
+      const data = await response.json();
+      localStorage.setItem(cacheKey, JSON.stringify(data));
+      return data;
+    } catch (error) {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        console.warn('Utilizando tarefas do cache offline.');
+        return JSON.parse(cached);
+      }
+      throw error;
+    }
   },
 
   async updateTarefa(id, payload, observacao = null) {
