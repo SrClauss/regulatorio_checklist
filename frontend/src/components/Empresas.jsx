@@ -136,7 +136,7 @@ export default function Empresas({ user, onViewCompany }) {
       </div>
 
       {/* Grid de Empresas */}
-      <div style={styles.grid}>
+      <div style={styles.grid} className="empresas-grid">
         {filteredEmpresas.map(emp => {
           const stats = getEmpresaStats(emp._id);
           return (

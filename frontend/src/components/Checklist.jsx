@@ -356,7 +356,7 @@ export default function Checklist({
 
       <div style={styles.mainLayout}>
         {/* Tabela de Tarefas */}
-        <div className="glass-panel" style={styles.tablePanel}>
+        <div className="glass-panel responsive-table-container" style={styles.tablePanel}>
           <table style={styles.table}>
             <thead>
               <tr style={styles.theadRow}>

@@ -157,7 +157,7 @@ export default function DocumentoDetail({ documentId, user, onBack, onGoToCompan
           </div>
         </div>
 
-        <div style={styles.tableWrapper}>
+        <div style={styles.tableWrapper} className="responsive-table-container">
           <table style={styles.table}>
             <thead>
               <tr style={styles.theadRow}>

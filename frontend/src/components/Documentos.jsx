@@ -131,7 +131,7 @@ export default function Documentos({ user, onViewDocument, onGoToCompany }) {
       </div>
 
       {/* Grid de Cartões de Documento */}
-      <div style={styles.grid}>
+      <div style={styles.grid} className="documentos-grid">
         {filteredDocs.map(doc => {
           const isExpired = new Date(doc.data_vencimento) < new Date();
           const companyName = getEmpresaNome(doc.empresa_id);

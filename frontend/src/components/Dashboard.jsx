@@ -99,7 +99,7 @@ export default function Dashboard({ user, onViewTask, onViewDocument }) {
       </header>
 
       {/* Grid de Cards de Destaque */}
-      <section style={{
+      <section className="dashboard-card-grid" style={{
         ...styles.cardGrid,
         gridTemplateColumns: (user.role === 'admin' || user.role === 'consultor') ? 'repeat(auto-fit, minmax(300px, 1fr))' : 'repeat(auto-fit, minmax(350px, 1fr))'
       }}>
@@ -171,28 +171,30 @@ export default function Dashboard({ user, onViewTask, onViewDocument }) {
                 <span>R$ 0,00</span>
               </div>
               
-              <div style={styles.barsContainer}>
-                {anualData.map((mesData, index) => {
-                  const heightPercent = Math.max(((mesData.faturamento_condicionantes || 0) / maxRevenue) * 100, 4);
-                  const costHeightPercent = Math.max(((mesData.faturamento_renovacoes || 0) / maxRevenue) * 100, 4);
-                  return (
-                    <div key={index} style={styles.barColumn}>
-                      <div style={styles.barGroup}>
-                        {/* Barra de Receita */}
-                        <div 
-                          style={{ ...styles.bar, height: `${heightPercent}%`, background: 'var(--primary)' }}
-                          title={`Receita: ${formatCurrency(mesData.faturamento_condicionantes || 0)}`}
-                        ></div>
-                        {/* Barra de Custos */}
-                        <div 
-                          style={{ ...styles.bar, height: `${costHeightPercent}%`, background: 'var(--danger)' }}
-                          title={`Custos: ${formatCurrency(mesData.faturamento_renovacoes || 0)}`}
-                        ></div>
+              <div style={styles.chartScrollWrapper}>
+                <div style={styles.barsContainer}>
+                  {anualData.map((mesData, index) => {
+                    const heightPercent = Math.max(((mesData.faturamento_condicionantes || 0) / maxRevenue) * 100, 4);
+                    const costHeightPercent = Math.max(((mesData.faturamento_renovacoes || 0) / maxRevenue) * 100, 4);
+                    return (
+                      <div key={index} style={styles.barColumn}>
+                        <div style={styles.barGroup}>
+                          {/* Barra de Receita */}
+                          <div 
+                            style={{ ...styles.bar, height: `${heightPercent}%`, background: 'var(--primary)' }}
+                            title={`Receita: ${formatCurrency(mesData.faturamento_condicionantes || 0)}`}
+                          ></div>
+                          {/* Barra de Custos */}
+                          <div 
+                            style={{ ...styles.bar, height: `${costHeightPercent}%`, background: 'var(--danger)' }}
+                            title={`Custos: ${formatCurrency(mesData.faturamento_renovacoes || 0)}`}
+                          ></div>
+                        </div>
+                        <span style={styles.barLabel}>{getMonthName(mesData.mes)}</span>
                       </div>
-                      <span style={styles.barLabel}>{getMonthName(mesData.mes)}</span>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
             </div>
             <div style={styles.chartLegend}>
@@ -359,7 +361,7 @@ const styles = {
   chartArea: {
     flex: 1,
     display: 'flex',
-    gap: '1.5rem',
+    gap: '1rem',
     height: '240px',
     position: 'relative',
     borderBottom: '1px solid var(--glass-border)',
@@ -375,12 +377,18 @@ const styles = {
     width: '80px',
     paddingRight: '0.5rem',
   },
-  barsContainer: {
+  chartScrollWrapper: {
     flex: 1,
+    overflowX: 'auto',
+    height: '100%',
+    paddingBottom: '4px',
+  },
+  barsContainer: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
     height: '100%',
+    minWidth: '480px',
   },
   barColumn: {
     display: 'flex',
@@ -413,7 +421,8 @@ const styles = {
   chartLegend: {
     display: 'flex',
     justifyContent: 'center',
-    gap: '2rem',
+    gap: '1rem',
+    flexWrap: 'wrap',
     marginTop: '1.25rem',
   },
   legendItem: {

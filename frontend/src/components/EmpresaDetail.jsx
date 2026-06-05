@@ -112,7 +112,7 @@ export default function EmpresaDetail({ companyId, user, onBack, onViewDocument,
       </div>
 
       {/* Grid de Informações Gerais e Métricas */}
-      <div style={styles.gridTwoColumns}>
+      <div style={styles.gridTwoColumns} className="grid-two-columns">
         {/* Ficha Técnica */}
         <div className="glass-panel" style={styles.panelCard}>
           <h3 style={styles.cardHeaderTitle}>Ficha Cadastral</h3>
@@ -176,7 +176,7 @@ export default function EmpresaDetail({ companyId, user, onBack, onViewDocument,
           </div>
         </div>
 
-        <div style={styles.tableWrapper}>
+        <div style={styles.tableWrapper} className="responsive-table-container">
           <table style={styles.table}>
             <thead>
               <tr style={styles.theadRow}>
@@ -241,7 +241,7 @@ export default function EmpresaDetail({ companyId, user, onBack, onViewDocument,
           </div>
         </div>
 
-        <div style={styles.tableWrapper}>
+        <div style={styles.tableWrapper} className="responsive-table-container">
           <table style={styles.table}>
             <thead>
               <tr style={styles.theadRow}>

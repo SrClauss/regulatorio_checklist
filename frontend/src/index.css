@@ -499,3 +499,34 @@ h1, h2, h3, h4, h5, h6 {
 .animate-fade-in {
   animation: fadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* Responsividade Avançada para Gráficos, Grids e Tabelas em Dispositivos Móveis */
+@media (max-width: 768px) {
+  /* Forçar tabelas a não esmagarem, usando scroll horizontal no container */
+  .responsive-table-container {
+    overflow-x: auto !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    width: 100% !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .responsive-table-container table {
+    min-width: 650px !important;
+    width: 100% !important;
+  }
+  
+  /* Diminuir espaçamentos de cards e painéis no mobile para ganhar espaço */
+  .glass-panel, .glass-card {
+    padding: 1rem !important;
+  }
+
+  /* Ajustar grids para uma única coluna no mobile quando houver pouco espaço */
+  .empresas-grid, 
+  .documentos-grid, 
+  .grid-two-columns, 
+  .dashboard-card-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1rem !important;
+  }
+}
