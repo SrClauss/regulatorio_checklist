@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 
 export default function Dashboard({ user, onViewTask, onViewDocument }) {
-  const [faturamentoMensal, setFaturamentoMensal] = useState({ receita_estimada: 0, custo_renovacoes: 0, faturamento_liquido: 0 });
+  const [faturamentoMensal, setFaturamentoMensal] = useState({ faturamento_condicionantes: 0, faturamento_renovacoes: 0, faturamento_total: 0 });
   const [anualData, setAnualData] = useState([]);
   const [tarefasUrgentes, setTarefasUrgentes] = useState([]);
   const [documentosUrgentes, setDocumentosUrgentes] = useState([]);
@@ -23,14 +23,14 @@ export default function Dashboard({ user, onViewTask, onViewDocument }) {
         const mes = now.getMonth() + 1;
         const ano = now.getFullYear();
 
-        if (user.role === 'admin') {
+        if (user.role === 'admin' || user.role === 'consultor') {
           // 1. Faturamento e Previsibilidade Mensal
           const prevMensal = await api.getPrevisibilidadeMensal(mes, ano);
           setFaturamentoMensal(prevMensal);
 
           // 2. Gráfico Anual
           const prevAnual = await api.getPrevisibilidadeAnual(ano);
-          setAnualData(prevAnual.meses || []);
+          setAnualData(prevAnual.consolidado_mensal || []);
         }
 
         // 3. Tarefas pendentes/urgentes
@@ -68,8 +68,11 @@ export default function Dashboard({ user, onViewTask, onViewDocument }) {
     return new Date(dateStr).toLocaleDateString('pt-BR');
   };
 
-  // Encontra a maior receita anual para escalar a altura do gráfico
-  const maxRevenue = Math.max(...anualData.map(m => m.receita_estimada || 0), 1000);
+  // Encontra a maior receita ou custo anual para escalar a altura do gráfico
+  const maxRevenue = Math.max(
+    ...anualData.map(m => Math.max(m.faturamento_condicionantes || 0, m.faturamento_renovacoes || 0)),
+    1000
+  );
 
   const getMonthName = (mIndex) => {
     const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -98,20 +101,20 @@ export default function Dashboard({ user, onViewTask, onViewDocument }) {
       {/* Grid de Cards de Destaque */}
       <section style={{
         ...styles.cardGrid,
-        gridTemplateColumns: user.role === 'admin' ? 'repeat(auto-fit, minmax(300px, 1fr))' : 'repeat(auto-fit, minmax(350px, 1fr))'
+        gridTemplateColumns: (user.role === 'admin' || user.role === 'consultor') ? 'repeat(auto-fit, minmax(300px, 1fr))' : 'repeat(auto-fit, minmax(350px, 1fr))'
       }}>
-        {/* Faturamento (Apenas Admin) */}
-        {user.role === 'admin' && (
+        {/* Faturamento (Admin e Consultor) */}
+        {(user.role === 'admin' || user.role === 'consultor') && (
           <div className="glass-card" style={styles.card}>
             <div style={{ ...styles.cardIconBg, background: 'var(--primary-light)' }}>
               <DollarSign size={24} color="var(--primary)" />
             </div>
             <div style={styles.cardContent}>
               <span style={styles.cardLabel}>Faturamento Esperado (Mês)</span>
-              <h2 style={styles.cardVal}>{formatCurrency(faturamentoMensal.receita_estimada)}</h2>
+              <h2 style={styles.cardVal}>{formatCurrency(faturamentoMensal.faturamento_total || 0)}</h2>
               <div style={styles.cardDetails}>
                 <span style={{ color: 'var(--text-light)', fontSize: '0.8rem' }}>
-                  Custos de Renovação: {formatCurrency(faturamentoMensal.custo_renovacoes)}
+                  Custos de Renovação: {formatCurrency(faturamentoMensal.faturamento_renovacoes || 0)}
                 </span>
               </div>
             </div>
@@ -153,8 +156,8 @@ export default function Dashboard({ user, onViewTask, onViewDocument }) {
 
       {/* Gráfico & Alertas Secundários */}
       <section className="dashboard-main-section">
-        {/* Gráfico de Barras Pure CSS (Apenas Admin) */}
-        {user.role === 'admin' && (
+        {/* Gráfico de Barras Pure CSS (Admin e Consultor) */}
+        {(user.role === 'admin' || user.role === 'consultor') && (
           <div className="glass-panel" style={styles.chartPanel}>
             <div style={styles.panelHeader}>
               <TrendingUp size={20} color="var(--primary)" />
@@ -170,20 +173,20 @@ export default function Dashboard({ user, onViewTask, onViewDocument }) {
               
               <div style={styles.barsContainer}>
                 {anualData.map((mesData, index) => {
-                  const heightPercent = Math.max((mesData.receita_estimada / maxRevenue) * 100, 4);
-                  const costHeightPercent = Math.max((mesData.custo_renovacoes / maxRevenue) * 100, 4);
+                  const heightPercent = Math.max(((mesData.faturamento_condicionantes || 0) / maxRevenue) * 100, 4);
+                  const costHeightPercent = Math.max(((mesData.faturamento_renovacoes || 0) / maxRevenue) * 100, 4);
                   return (
                     <div key={index} style={styles.barColumn}>
                       <div style={styles.barGroup}>
                         {/* Barra de Receita */}
                         <div 
                           style={{ ...styles.bar, height: `${heightPercent}%`, background: 'var(--primary)' }}
-                          title={`Receita: ${formatCurrency(mesData.receita_estimada)}`}
+                          title={`Receita: ${formatCurrency(mesData.faturamento_condicionantes || 0)}`}
                         ></div>
                         {/* Barra de Custos */}
                         <div 
                           style={{ ...styles.bar, height: `${costHeightPercent}%`, background: 'var(--danger)' }}
-                          title={`Custos: ${formatCurrency(mesData.custo_renovacoes)}`}
+                          title={`Custos: ${formatCurrency(mesData.faturamento_renovacoes || 0)}`}
                         ></div>
                       </div>
                       <span style={styles.barLabel}>{getMonthName(mesData.mes)}</span>
@@ -202,8 +205,8 @@ export default function Dashboard({ user, onViewTask, onViewDocument }) {
         {/* Listas Rápidas de Alertas */}
         <div style={{
           ...styles.alertsPanelGroup,
-          display: user.role === 'admin' ? 'flex' : 'grid',
-          gridTemplateColumns: user.role === 'admin' ? '1fr' : 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))',
+          display: (user.role === 'admin' || user.role === 'consultor') ? 'flex' : 'grid',
+          gridTemplateColumns: (user.role === 'admin' || user.role === 'consultor') ? '1fr' : 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))',
           gap: '1.5rem'
         }}>
           {/* Tarefas */}
