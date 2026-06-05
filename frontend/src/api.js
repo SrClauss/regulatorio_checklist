@@ -208,4 +208,23 @@ export const api = {
     if (!response.ok) throw new Error('Falha ao obter previsibilidade anual');
     return response.json();
   },
+
+  async getVapidPublicKey() {
+    const response = await fetch(`${API_BASE_URL}/api/notificacoes/vapid-key`, {
+      method: 'GET',
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error('Falha ao obter chave pública VAPID');
+    return response.json();
+  },
+
+  async subscribePush(subscription) {
+    const response = await fetch(`${API_BASE_URL}/api/notificacoes/subscribe`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(subscription),
+    });
+    if (!response.ok) throw new Error('Falha ao registrar inscrição de push');
+    return response.json();
+  },
 };

@@ -7,10 +7,11 @@ import {
   CheckSquare, 
   Settings, 
   LogOut, 
-  User 
+  User,
+  WifiOff
 } from 'lucide-react';
 
-export default function Sidebar({ user, activeTab, setActiveTab, onLogout }) {
+export default function Sidebar({ user, activeTab, setActiveTab, onLogout, isOnline }) {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'consultor'] },
     { id: 'calendario', label: 'Calendário', icon: Calendar, roles: ['admin', 'consultor', 'cliente'] },
@@ -43,6 +44,22 @@ export default function Sidebar({ user, activeTab, setActiveTab, onLogout }) {
             <Shield size={20} color="#2563eb" />
           </div>
           <h2>Claudio</h2>
+          {!isOnline && (
+            <span style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.2rem',
+              background: 'rgba(239, 68, 68, 0.15)',
+              color: 'var(--danger)',
+              fontSize: '0.7rem',
+              fontWeight: '600',
+              padding: '0.2rem 0.45rem',
+              borderRadius: '6px',
+              marginLeft: '0.5rem'
+            }}>
+              <WifiOff size={10} /> Offline
+            </span>
+          )}
         </div>
         <button onClick={handleLogout} className="glass-btn mobile-logout-btn">
           <LogOut size={16} /> Sair
@@ -57,7 +74,24 @@ export default function Sidebar({ user, activeTab, setActiveTab, onLogout }) {
             <Shield size={24} color="#2563eb" />
           </div>
           <div>
-            <h2 className="sidebar-brand-title">Claudio</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <h2 className="sidebar-brand-title">Claudio</h2>
+              {!isOnline && (
+                <span style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.2rem',
+                  background: 'rgba(239, 68, 68, 0.15)',
+                  color: 'var(--danger)',
+                  fontSize: '0.65rem',
+                  fontWeight: '600',
+                  padding: '0.15rem 0.35rem',
+                  borderRadius: '6px',
+                }}>
+                  <WifiOff size={9} /> Offline
+                </span>
+              )}
+            </div>
             <span className="sidebar-brand-subtitle">Gestão Regulatória</span>
           </div>
         </div>

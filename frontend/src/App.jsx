@@ -6,11 +6,26 @@ import Dashboard from './components/Dashboard';
 import Calendario from './components/Calendario';
 import Checklist from './components/Checklist';
 import Cadastros from './components/Cadastros';
+import { registerPushNotifications } from './utils/pushSubscription';
 
 function App() {
   const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     const verifyUser = async () => {
@@ -22,6 +37,8 @@ function App() {
           if (userData.role === 'cliente') {
             setActiveTab('checklist');
           }
+          // Registra push notification se suportado e autenticado
+          setTimeout(() => registerPushNotifications(), 1500);
         } catch (err) {
           console.error("Token expirado ou inválido.");
           api.logout();
@@ -36,6 +53,7 @@ function App() {
   const handleLoginSuccess = (userData) => {
     setUser(userData);
     setActiveTab(userData.role === 'cliente' ? 'checklist' : 'dashboard');
+    setTimeout(() => registerPushNotifications(), 1000);
   };
 
   const handleLogout = () => {
@@ -82,6 +100,7 @@ function App() {
         activeTab={activeTab} 
         setActiveTab={setActiveTab} 
         onLogout={handleLogout} 
+        isOnline={isOnline}
       />
 
       {/* Área de Conteúdo Principal */}
