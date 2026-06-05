@@ -15,7 +15,7 @@ import {
   Bell
 } from 'lucide-react';
 
-export default function Checklist({ user, selectedTaskId, onClearSelectedTask }) {
+export default function Checklist({ user, selectedTaskId, onClearSelectedTask, initialCompanyId, onClearCompanyFilter }) {
   const [tarefas, setTarefas] = useState([]);
   const [empresas, setEmpresas] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
@@ -33,6 +33,13 @@ export default function Checklist({ user, selectedTaskId, onClearSelectedTask })
   const [errorMessage, setErrorMessage] = useState('');
   const [textoProvidencia, setTextoProvidencia] = useState('');
   const [notificandoChecklistId, setNotificandoChecklistId] = useState(null);
+
+  useEffect(() => {
+    if (initialCompanyId) {
+      setFiltroEmpresa(initialCompanyId);
+      onClearCompanyFilter();
+    }
+  }, [initialCompanyId]);
 
   const fetchDados = async () => {
     try {

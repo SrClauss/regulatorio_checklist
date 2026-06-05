@@ -8,12 +8,14 @@ import {
   Settings, 
   LogOut, 
   User,
-  WifiOff
+  WifiOff,
+  Building
 } from 'lucide-react';
 
 export default function Sidebar({ user, activeTab, setActiveTab, onLogout, isOnline }) {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'consultor'] },
+    { id: 'empresas', label: 'Empresas', icon: Building, roles: ['admin', 'consultor'] },
     { id: 'calendario', label: 'Calendário', icon: Calendar, roles: ['admin', 'consultor', 'cliente'] },
     { id: 'checklist', label: 'Checklist & Auditoria', icon: CheckSquare, roles: ['admin', 'consultor', 'cliente'] },
     { id: 'cadastros', label: 'Cadastros & Painel', icon: Settings, roles: ['admin'] },

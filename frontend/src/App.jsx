@@ -6,6 +6,7 @@ import Dashboard from './components/Dashboard';
 import Calendario from './components/Calendario';
 import Checklist from './components/Checklist';
 import Cadastros from './components/Cadastros';
+import Empresas from './components/Empresas';
 import { registerPushNotifications } from './utils/pushSubscription';
 
 function App() {
@@ -14,9 +15,15 @@ function App() {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [selectedTaskId, setSelectedTaskId] = useState(null);
+  const [selectedCompanyId, setSelectedCompanyId] = useState(null);
 
   const handleViewTask = (taskId) => {
     setSelectedTaskId(taskId);
+    setActiveTab('checklist');
+  };
+
+  const handleGoToChecklist = (companyId) => {
+    setSelectedCompanyId(companyId);
     setActiveTab('checklist');
   };
 
@@ -87,6 +94,8 @@ function App() {
     switch (activeTab) {
       case 'dashboard':
         return <Dashboard user={user} />;
+      case 'empresas':
+        return <Empresas user={user} onGoToChecklist={handleGoToChecklist} />;
       case 'calendario':
         return <Calendario user={user} onViewTask={handleViewTask} />;
       case 'checklist':
@@ -95,6 +104,8 @@ function App() {
             user={user} 
             selectedTaskId={selectedTaskId} 
             onClearSelectedTask={() => setSelectedTaskId(null)} 
+            initialCompanyId={selectedCompanyId}
+            onClearCompanyFilter={() => setSelectedCompanyId(null)}
           />
         );
       case 'cadastros':
