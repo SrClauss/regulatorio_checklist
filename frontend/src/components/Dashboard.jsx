@@ -366,6 +366,7 @@ const styles = {
     position: 'relative',
     borderBottom: '1px solid var(--glass-border)',
     paddingBottom: '0.5rem',
+    minWidth: 0,
   },
   yAxis: {
     display: 'flex',
@@ -382,6 +383,7 @@ const styles = {
     overflowX: 'auto',
     height: '100%',
     paddingBottom: '4px',
+    minWidth: 0,
   },
   barsContainer: {
     display: 'flex',

@@ -248,6 +248,7 @@ body {
     padding: 1rem;
     padding-top: 5rem; /* Para o header superior */
     padding-bottom: 90px; /* Para a bottom nav */
+    overflow-x: hidden; /* Evita que a página inteira role horizontalmente no mobile */
   }
 
   .mobile-top-header {
@@ -352,6 +353,7 @@ body {
   border: 1px solid var(--glass-border);
   box-shadow: var(--shadow-md);
   border-radius: var(--border-radius-lg);
+  min-width: 0; /* Impede que o painel estique o grid ou container flex */
 }
 
 .glass-card {
@@ -364,6 +366,7 @@ body {
   padding: 1.5rem;
   position: relative;
   overflow: hidden;
+  min-width: 0; /* Impede que o card estique o grid ou container flex */
 }
 
 .glass-card:hover {
