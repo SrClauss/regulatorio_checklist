@@ -100,11 +100,6 @@ export default function Empresas({ user, onViewCompany }) {
     );
   }
 
-  // Dados para exibição expandida da empresa selecionada
-  const selectedEmpresaDocs = selectedEmpresa ? documentos.filter(d => d.empresa_id === selectedEmpresa._id) : [];
-  const selectedEmpresaTasks = selectedEmpresa ? tarefas.filter(t => t.empresa_id === selectedEmpresa._id) : [];
-  const selectedStats = selectedEmpresa ? getEmpresaStats(selectedEmpresa._id) : null;
-
   return (
     <div className="animate-fade-in" style={styles.container}>
       <header style={styles.header}>
