@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api';
-import { ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, Clock, CheckCircle, ArrowLeft } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, Clock, CheckCircle, ArrowLeft, Bell, ExternalLink } from 'lucide-react';
 
-export default function Calendario({ user }) {
+export default function Calendario({ user, onViewTask }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState('annual'); // 'annual' ou 'monthly'
   const [tarefas, setTarefas] = useState([]);
@@ -10,6 +10,29 @@ export default function Calendario({ user }) {
   const [selectedDayEvents, setSelectedDayEvents] = useState(null);
   const [selectedDateLabel, setSelectedDateLabel] = useState('');
   const [loading, setLoading] = useState(true);
+  const [notifyingTaskId, setNotifyingTaskId] = useState(null);
+  const [toastMessage, setToastMessage] = useState(null);
+
+  const handleNotify = async (taskId) => {
+    setNotifyingTaskId(taskId);
+    setToastMessage(null);
+    try {
+      const updatedTask = await api.notifyTarefa(taskId);
+      setToastMessage({ type: 'success', text: 'Notificação push enviada e registrada com sucesso!' });
+      setTarefas(prev => prev.map(t => t._id === taskId ? updatedTask : t));
+      if (selectedDayEvents) {
+        setSelectedDayEvents(prev => ({
+          ...prev,
+          tasks: prev.tasks.map(t => t._id === taskId ? updatedTask : t)
+        }));
+      }
+    } catch (err) {
+      setToastMessage({ type: 'error', text: err.message || 'Falha ao notificar responsável.' });
+    } finally {
+      setNotifyingTaskId(null);
+      setTimeout(() => setToastMessage(null), 4000);
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -294,6 +317,17 @@ export default function Calendario({ user }) {
               </div>
               <span style={styles.drawerDate}>{selectedDateLabel}</span>
 
+              {toastMessage && (
+                <div style={{
+                  ...styles.toast,
+                  background: toastMessage.type === 'success' ? 'var(--success-light)' : 'var(--danger-light)',
+                  color: toastMessage.type === 'success' ? 'var(--success)' : 'var(--danger)',
+                  borderColor: toastMessage.type === 'success' ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)'
+                }}>
+                  {toastMessage.text}
+                </div>
+              )}
+
               <div style={styles.drawerContent}>
                 {/* Documentos */}
                 {selectedDayEvents.docs.length > 0 && (
@@ -317,32 +351,64 @@ export default function Calendario({ user }) {
                   <div style={styles.eventSection}>
                     <h4 style={styles.sectionTitle}>Condicionantes ({selectedDayEvents.tasks.length})</h4>
                     <div style={styles.eventList}>
-                      {selectedDayEvents.tasks.map(task => (
-                        <div 
-                          key={task._id} 
-                          style={{ 
-                            ...styles.eventCard, 
-                            borderLeft: `4px solid ${task.status === 'Concluído' ? 'var(--success)' : 'var(--warning)'}` 
-                          }}
-                        >
-                          <span style={styles.eventCardTitle}>{task.titulo}</span>
-                          <p style={styles.eventCardDesc}>{task.descricao}</p>
-                          <div style={styles.eventCardFooter}>
-                            <span style={styles.eventCardSub}>
-                              {task.status === 'Concluído' ? (
-                                <span style={{ color: 'var(--success)', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
-                                  <CheckCircle size={12} /> Concluído
-                                </span>
-                              ) : (
-                                <span style={{ color: 'var(--warning)', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
-                                  <Clock size={12} /> {task.status}
-                                </span>
+                      {selectedDayEvents.tasks.map(task => {
+                        const isPending = task.status !== 'Concluído';
+                        return (
+                          <div 
+                            key={task._id} 
+                            style={{ 
+                              ...styles.eventCard, 
+                              borderLeft: `4px solid ${task.status === 'Concluído' ? 'var(--success)' : 'var(--warning)'}` 
+                            }}
+                          >
+                            <span style={styles.eventCardTitle}>{task.titulo}</span>
+                            <p style={styles.eventCardDesc}>{task.descricao}</p>
+                            <div style={styles.eventCardFooter}>
+                              <span style={styles.eventCardSub}>
+                                {task.status === 'Concluído' ? (
+                                  <span style={{ color: 'var(--success)', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                                    <CheckCircle size={12} /> Concluído
+                                  </span>
+                                ) : (
+                                  <span style={{ color: 'var(--warning)', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}>
+                                    <Clock size={12} /> {task.status}
+                                  </span>
+                                )}
+                              </span>
+                              <span style={styles.eventCardPrice}>R$ {task.valor_estimado}</span>
+                            </div>
+
+                            <div style={styles.calendarTaskActions}>
+                              <button 
+                                onClick={() => onViewTask(task._id)}
+                                className="glass-btn"
+                                style={styles.calendarActionBtn}
+                                title="Ver detalhes no Checklist"
+                              >
+                                <ExternalLink size={12} />
+                                <span>Ver Checklist</span>
+                              </button>
+
+                              {isPending && (
+                                <button 
+                                  onClick={() => handleNotify(task._id)}
+                                  disabled={notifyingTaskId === task._id}
+                                  className="glass-btn"
+                                  style={{
+                                    ...styles.calendarActionBtn,
+                                    color: 'var(--primary)',
+                                    borderColor: 'rgba(37, 99, 235, 0.2)',
+                                  }}
+                                  title="Notificar responsável no browser"
+                                >
+                                  <Bell size={12} />
+                                  <span>{notifyingTaskId === task._id ? 'Enviando...' : 'Cobrar'}</span>
+                                </button>
                               )}
-                            </span>
-                            <span style={styles.eventCardPrice}>R$ {task.valor_estimado}</span>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -668,5 +734,35 @@ const styles = {
     border: '4px solid var(--glass-border)',
     borderTopColor: 'var(--primary)',
     borderRadius: '50%',
+  },
+  toast: {
+    padding: '0.75rem 1rem',
+    borderRadius: '10px',
+    border: '1px solid',
+    fontSize: '0.85rem',
+    fontWeight: '550',
+    marginBottom: '1rem',
+    textAlign: 'left',
+  },
+  calendarTaskActions: {
+    display: 'flex',
+    gap: '0.5rem',
+    marginTop: '0.75rem',
+    paddingTop: '0.75rem',
+    borderTop: '1px solid var(--glass-border)',
+  },
+  calendarActionBtn: {
+    flex: 1,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '0.3rem',
+    padding: '0.35rem 0.5rem',
+    fontSize: '0.75rem',
+    background: 'rgba(255, 255, 255, 0.4)',
+    border: '1px solid var(--glass-border)',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontWeight: '550',
   },
 };

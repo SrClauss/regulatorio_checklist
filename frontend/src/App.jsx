@@ -13,6 +13,12 @@ function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [selectedTaskId, setSelectedTaskId] = useState(null);
+
+  const handleViewTask = (taskId) => {
+    setSelectedTaskId(taskId);
+    setActiveTab('checklist');
+  };
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -82,9 +88,15 @@ function App() {
       case 'dashboard':
         return <Dashboard user={user} />;
       case 'calendario':
-        return <Calendario user={user} />;
+        return <Calendario user={user} onViewTask={handleViewTask} />;
       case 'checklist':
-        return <Checklist user={user} />;
+        return (
+          <Checklist 
+            user={user} 
+            selectedTaskId={selectedTaskId} 
+            onClearSelectedTask={() => setSelectedTaskId(null)} 
+          />
+        );
       case 'cadastros':
         return <Cadastros user={user} />;
       default:

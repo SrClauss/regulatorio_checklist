@@ -11,10 +11,11 @@ import {
   Eye, 
   Clock, 
   AlertCircle,
-  HelpCircle
+  HelpCircle,
+  Bell
 } from 'lucide-react';
 
-export default function Checklist({ user }) {
+export default function Checklist({ user, selectedTaskId, onClearSelectedTask }) {
   const [tarefas, setTarefas] = useState([]);
   const [empresas, setEmpresas] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
@@ -30,6 +31,8 @@ export default function Checklist({ user }) {
   const [observacaoAuditoria, setObservacaoAuditoria] = useState('');
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
+  const [textoProvidencia, setTextoProvidencia] = useState('');
+  const [notificandoChecklistId, setNotificandoChecklistId] = useState(null);
 
   const fetchDados = async () => {
     try {
@@ -39,6 +42,14 @@ export default function Checklist({ user }) {
 
       const tList = await api.listTarefas(filters);
       setTarefas(tList);
+
+      if (selectedTaskId) {
+        const found = tList.find(t => t._id === selectedTaskId);
+        if (found) {
+          setSelectedTask(found);
+        }
+        onClearSelectedTask();
+      }
 
       // Carrega empresas e usuários para filtros e nomes
       if (empresas.length === 0) {
@@ -58,7 +69,7 @@ export default function Checklist({ user }) {
 
   useEffect(() => {
     fetchDados();
-  }, [filtroEmpresa, filtroStatus]);
+  }, [filtroEmpresa, filtroStatus, selectedTaskId]);
 
   const handleClaimTask = async (task) => {
     try {
@@ -100,6 +111,62 @@ export default function Checklist({ user }) {
       fetchDados();
     } catch (err) {
       setErrorMessage(err.message || 'Falha ao aprovar tarefa');
+    }
+  };
+
+  const handleMarkAsDone = async (task) => {
+    if (!textoProvidencia.trim()) {
+      setErrorMessage('Por favor, informe a providência tomada para marcar como concluída.');
+      return;
+    }
+    try {
+      setErrorMessage('');
+      const updated = await api.updateTarefa(task._id, {
+        status: 'Concluído'
+      }, textoProvidencia);
+      setTextoProvidencia('');
+      setSelectedTask(updated);
+      fetchDados();
+    } catch (err) {
+      setErrorMessage(err.message || 'Falha ao concluir tarefa');
+    }
+  };
+
+  const handleRegistrarProvidencia = async (task) => {
+    if (!textoProvidencia.trim()) {
+      setErrorMessage('Por favor, digite o texto da providência/observação.');
+      return;
+    }
+    try {
+      setErrorMessage('');
+      const novoStatus = task.status === 'Pendente' ? 'Em Andamento' : task.status;
+      const updated = await api.updateTarefa(task._id, {
+        status: novoStatus
+      }, `Providência registrada: ${textoProvidencia}`);
+      setTextoProvidencia('');
+      setSelectedTask(updated);
+      fetchDados();
+    } catch (err) {
+      setErrorMessage(err.message || 'Falha ao registrar providência');
+    }
+  };
+
+  const handleNotificarResponsavelChecklist = async (task) => {
+    setNotificandoChecklistId(task._id);
+    setErrorMessage('');
+    try {
+      const updated = await api.notifyTarefa(task._id);
+      setSelectedTask(updated);
+      fetchDados();
+      const successDiv = document.createElement('div');
+      successDiv.innerText = 'Notificação enviada ao responsável!';
+      successDiv.style.cssText = 'position:fixed;bottom:20px;right:20px;background:var(--success);color:white;padding:12px 24px;border-radius:10px;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);z-index:9999;font-weight:600;font-family:sans-serif;';
+      document.body.appendChild(successDiv);
+      setTimeout(() => successDiv.remove(), 4000);
+    } catch (err) {
+      setErrorMessage(err.message || 'Falha ao enviar notificação.');
+    } finally {
+      setNotificandoChecklistId(null);
     }
   };
 
@@ -410,6 +477,61 @@ export default function Checklist({ user }) {
                       </button>
                     </div>
                   </div>
+                )}
+
+                {user.role !== 'cliente' && selectedTask.status !== 'Concluído' && (
+                  <>
+                    <div style={styles.technicianControls}>
+                      <h4 style={styles.technicianTitle}>Ações do Técnico</h4>
+                      <textarea
+                        placeholder="Descreva a providência tomada ou observação da atividade..."
+                        value={textoProvidencia}
+                        onChange={e => setTextoProvidencia(e.target.value)}
+                        className="glass-input"
+                        rows={3}
+                        style={styles.technicianTextarea}
+                      />
+                      <div style={styles.technicianBtns}>
+                        <button 
+                          onClick={() => handleRegistrarProvidencia(selectedTask)}
+                          className="glass-btn"
+                          style={{ ...styles.technicianBtn, borderColor: 'var(--primary)', color: 'var(--primary)', background: 'transparent' }}
+                          title="Registrar a providência tomada no histórico sem concluir a tarefa"
+                        >
+                          Tomar Providência
+                        </button>
+                        <button 
+                          onClick={() => handleMarkAsDone(selectedTask)}
+                          className="glass-btn"
+                          style={{ ...styles.technicianBtn, background: 'var(--primary)', color: 'white', borderColor: 'transparent' }}
+                          title="Marcar condicionante como concluída"
+                        >
+                          Marcar como Feita
+                        </button>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => handleNotificarResponsavelChecklist(selectedTask)}
+                      disabled={notificandoChecklistId === selectedTask._id}
+                      className="glass-btn"
+                      style={{
+                        ...styles.fullWidthBtn,
+                        color: 'var(--warning)',
+                        borderColor: 'rgba(245, 158, 11, 0.4)',
+                        background: 'rgba(245, 158, 11, 0.05)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.5rem',
+                        fontWeight: '600'
+                      }}
+                      title="Cobrar responsável no celular/browser"
+                    >
+                      <Bell size={16} />
+                      <span>{notificandoChecklistId === selectedTask._id ? 'Enviando Notificação...' : 'Cobrar Responsável (Notificar Push)'}</span>
+                    </button>
+                  </>
                 )}
               </div>
 
@@ -764,5 +886,41 @@ const styles = {
     color: 'white',
     borderColor: 'var(--primary)',
     boxShadow: 'var(--shadow-sm)',
+  },
+  technicianControls: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.75rem',
+    background: 'rgba(255, 255, 255, 0.45)',
+    padding: '1rem',
+    borderRadius: '12px',
+    border: '1px solid var(--glass-border)',
+    textAlign: 'left',
+  },
+  technicianTitle: {
+    fontSize: '0.85rem',
+    fontWeight: '600',
+    color: 'var(--text-muted)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.03em',
+    marginBottom: '0.25rem',
+  },
+  technicianTextarea: {
+    resize: 'none',
+    fontSize: '0.85rem',
+    padding: '0.5rem 0.75rem',
+    borderRadius: '8px',
+  },
+  technicianBtns: {
+    display: 'flex',
+    gap: '0.5rem',
+  },
+  technicianBtn: {
+    flex: 1,
+    padding: '0.6rem',
+    fontSize: '0.8rem',
+    fontWeight: '600',
+    borderRadius: '8px',
+    cursor: 'pointer',
   },
 };

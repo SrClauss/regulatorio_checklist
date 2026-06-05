@@ -7,6 +7,7 @@ from app.database import get_database
 from app.models.tarefa import TarefaCreate, TarefaResponse, TarefaUpdate, TarefaDB, HistoricoObservacao
 from app.auth.dependencies import RoleChecker, get_current_active_user
 from app.models.usuario import UsuarioDB
+from app.utils.push import send_push_notification
 
 router = APIRouter(prefix="/api/tarefas", tags=["Tarefas Condicionantes"])
 
@@ -242,6 +243,81 @@ async def upload_receipt(
                 "historico_observacoes": [obs.model_dump(by_alias=True) for obs in historico]
             }
         },
+        return_document=True
+    )
+    
+    return TarefaResponse(**result)
+
+
+@router.post("/{tarefa_id}/notificar", response_model=TarefaResponse)
+async def notify_task_responsible(
+    tarefa_id: str,
+    current_user: UsuarioDB = Depends(get_current_active_user)
+):
+    """Envia uma notificação push para o responsável pela condicionante e registra no histórico de observações."""
+    db = get_database()
+    
+    task_dict = await db.tarefas.find_one({"_id": ObjectId(tarefa_id)})
+    if not task_dict:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tarefa não encontrada"
+        )
+        
+    task = TarefaDB(**task_dict)
+    
+    # 1. Obter o responsável
+    responsavel = await db.usuarios.find_one({"_id": task.responsavel_id})
+    if not responsavel:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuário responsável não encontrado"
+        )
+        
+    # 2. Buscar inscrições de push do responsável
+    inscricoes_cursor = db.inscricoes_push.find({"usuario_id": task.responsavel_id})
+    inscricoes = await inscricoes_cursor.to_list(length=100)
+    
+    sucessos = 0
+    erros_limpar = []
+    
+    # Corpo da notificação
+    title = f"Cobrança: {task.titulo}"
+    body = f"Olá {responsavel.get('nome', 'Responsável')}! Uma notificação foi enviada sobre a condicionante pendente '{task.titulo}'."
+    url = "/checklist"
+    
+    if inscricoes:
+        for ins in inscricoes:
+            try:
+                ok = send_push_notification(
+                    subscription=ins["subscription"],
+                    title=title,
+                    body=body,
+                    url=url
+                )
+                if ok:
+                    sucessos += 1
+            except HTTPException as ex:
+                if ex.status_code == 410:
+                    erros_limpar.append(ins["_id"])
+                    
+        # Limpa inscrições inválidas
+        if erros_limpar:
+            await db.inscricoes_push.delete_many({"_id": {"$in": erros_limpar}})
+            
+    # 3. Adicionar registro no histórico de observações (Rastreabilidade)
+    status_msg = f" com sucesso ({sucessos} dispositivos)" if sucessos > 0 else " (nenhum dispositivo cadastrado)"
+    log_texto = f"Notificação de cobrança enviada ao responsável {responsavel.get('nome')} por {current_user.nome}{status_msg}."
+    
+    historico = task.historico_observacoes
+    historico.append(HistoricoObservacao(
+        usuario_id=current_user.id,
+        texto=log_texto
+    ))
+    
+    result = await db.tarefas.find_one_and_update(
+        {"_id": ObjectId(tarefa_id)},
+        {"$set": {"historico_observacoes": [obs.model_dump(by_alias=True) for obs in historico]}},
         return_document=True
     )
     
