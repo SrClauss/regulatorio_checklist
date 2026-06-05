@@ -16,14 +16,16 @@ function App() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [selectedCompanyId, setSelectedCompanyId] = useState(null);
+  const [selectedDocumentId, setSelectedDocumentId] = useState(null);
 
   const handleViewTask = (taskId) => {
     setSelectedTaskId(taskId);
     setActiveTab('checklist');
   };
 
-  const handleGoToChecklist = (companyId) => {
+  const handleGoToChecklist = (companyId, documentId = null) => {
     setSelectedCompanyId(companyId);
+    setSelectedDocumentId(documentId);
     setActiveTab('checklist');
   };
 
@@ -97,7 +99,7 @@ function App() {
       case 'empresas':
         return <Empresas user={user} onGoToChecklist={handleGoToChecklist} />;
       case 'calendario':
-        return <Calendario user={user} onViewTask={handleViewTask} />;
+        return <Calendario user={user} onViewTask={handleViewTask} onGoToChecklist={handleGoToChecklist} />;
       case 'checklist':
         return (
           <Checklist 
@@ -106,6 +108,8 @@ function App() {
             onClearSelectedTask={() => setSelectedTaskId(null)} 
             initialCompanyId={selectedCompanyId}
             onClearCompanyFilter={() => setSelectedCompanyId(null)}
+            initialDocumentId={selectedDocumentId}
+            onClearDocumentFilter={() => setSelectedDocumentId(null)}
           />
         );
       case 'cadastros':

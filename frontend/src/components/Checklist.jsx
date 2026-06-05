@@ -15,7 +15,15 @@ import {
   Bell
 } from 'lucide-react';
 
-export default function Checklist({ user, selectedTaskId, onClearSelectedTask, initialCompanyId, onClearCompanyFilter }) {
+export default function Checklist({ 
+  user, 
+  selectedTaskId, 
+  onClearSelectedTask, 
+  initialCompanyId, 
+  onClearCompanyFilter,
+  initialDocumentId,
+  onClearDocumentFilter
+}) {
   const [tarefas, setTarefas] = useState([]);
   const [empresas, setEmpresas] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
@@ -24,6 +32,7 @@ export default function Checklist({ user, selectedTaskId, onClearSelectedTask, i
   const [filtroEmpresa, setFiltroEmpresa] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('');
   const [filtroPeriodicidade, setFiltroPeriodicidade] = useState('');
+  const [filtroDocumento, setFiltroDocumento] = useState('');
   
   // Seleção e Ações
   const [selectedTask, setSelectedTask] = useState(null);
@@ -41,11 +50,19 @@ export default function Checklist({ user, selectedTaskId, onClearSelectedTask, i
     }
   }, [initialCompanyId]);
 
+  useEffect(() => {
+    if (initialDocumentId) {
+      setFiltroDocumento(initialDocumentId);
+      if (onClearDocumentFilter) onClearDocumentFilter();
+    }
+  }, [initialDocumentId]);
+
   const fetchDados = async () => {
     try {
       const filters = {};
       if (filtroEmpresa) filters.empresa_id = filtroEmpresa;
       if (filtroStatus) filters.status = filtroStatus;
+      if (filtroDocumento) filters.documento_id = filtroDocumento;
 
       const tList = await api.listTarefas(filters);
       setTarefas(tList);
@@ -76,7 +93,7 @@ export default function Checklist({ user, selectedTaskId, onClearSelectedTask, i
 
   useEffect(() => {
     fetchDados();
-  }, [filtroEmpresa, filtroStatus, selectedTaskId]);
+  }, [filtroEmpresa, filtroStatus, filtroDocumento, selectedTaskId]);
 
   const handleClaimTask = async (task) => {
     try {
@@ -295,6 +312,38 @@ export default function Checklist({ user, selectedTaskId, onClearSelectedTask, i
               );
             })}
           </div>
+          {filtroDocumento && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              background: 'rgba(59, 130, 246, 0.15)',
+              color: 'var(--primary)',
+              border: '1px solid rgba(59, 130, 246, 0.25)',
+              padding: '0.4rem 0.75rem',
+              borderRadius: '8px',
+              fontSize: '0.825rem',
+              fontWeight: '550',
+              width: 'fit-content',
+            }}>
+              <span>Filtrado por condicionantes da Licença/Documento</span>
+              <button 
+                onClick={() => setFiltroDocumento('')} 
+                style={{ 
+                  background: 'transparent', 
+                  border: 'none', 
+                  color: 'var(--primary)', 
+                  cursor: 'pointer', 
+                  display: 'inline-flex', 
+                  alignItems: 'center',
+                  padding: '0.1rem'
+                }}
+                title="Limpar filtro"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
         </div>
       </header>
 

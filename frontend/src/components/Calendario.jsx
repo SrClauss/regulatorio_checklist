@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from '../api';
 import { ChevronLeft, ChevronRight, X, Calendar as CalendarIcon, Clock, CheckCircle, ArrowLeft, Bell, ExternalLink, RefreshCw } from 'lucide-react';
 
-export default function Calendario({ user, onViewTask }) {
+export default function Calendario({ user, onViewTask, onGoToChecklist }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState('annual'); // 'annual' ou 'monthly'
   const [tarefas, setTarefas] = useState([]);
@@ -390,23 +390,21 @@ export default function Calendario({ user, onViewTask }) {
                           <span style={styles.eventCardSub}>Órgão: {doc.orgao}</span>
                           <span style={styles.eventCardSub}>Processo: {doc.numero_processo || 'Não informado'}</span>
                           <span style={styles.eventCardSub}>Status: {doc.status}</span>
-                          {user.role !== 'cliente' && (
-                            <div style={{ display: 'flex', marginTop: '0.5rem' }}>
-                              <button 
-                                onClick={() => startRenewal(doc)}
-                                className="glass-btn"
-                                style={{
-                                  ...styles.calendarActionBtn,
-                                  color: 'var(--success)',
-                                  borderColor: 'rgba(16, 185, 129, 0.2)',
-                                }}
-                                title="Registrar renovação do documento"
-                              >
-                                <RefreshCw size={12} />
-                                <span>Renovar Licença</span>
-                              </button>
-                            </div>
-                          )}
+                          <div style={{ display: 'flex', marginTop: '0.5rem' }}>
+                            <button 
+                              onClick={() => onGoToChecklist && onGoToChecklist(doc.empresa_id, doc._id)}
+                              className="glass-btn"
+                              style={{
+                                ...styles.calendarActionBtn,
+                                color: 'var(--primary)',
+                                borderColor: 'rgba(37, 99, 235, 0.2)',
+                              }}
+                              title="Ver condicionantes no Checklist"
+                            >
+                              <ExternalLink size={12} />
+                              <span>Ver Condicionantes</span>
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -482,86 +480,6 @@ export default function Calendario({ user, onViewTask }) {
               </div>
             </div>
           )}
-        </div>
-      )}
-      {/* MODAL DE RENOVAÇÃO */}
-      {renewingDoc && (
-        <div style={styles.modalOverlay} onClick={() => setRenewingDoc(null)}>
-          <div className="glass-panel animate-fade-in" style={styles.modalCard} onClick={e => e.stopPropagation()}>
-            <div style={styles.modalHeader}>
-              <h3 style={styles.modalTitle}>Renovar Documento / Licença</h3>
-              <button onClick={() => setRenewingDoc(null)} style={styles.closeBtn}>
-                <X size={18} />
-              </button>
-            </div>
-            <div style={styles.modalBody}>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.25rem', lineHeight: '1.4' }}>
-                Você está registrando a renovação de: <strong style={{ color: 'var(--text-main)' }}>{renewingDoc.tipo}</strong>.<br />
-                Insira as datas do novo ciclo. O sistema prorrogará o status da licença para <strong>Ativo</strong>.
-              </p>
-
-              <div className="glass-input-group" style={{ marginBottom: '1rem' }}>
-                <label className="glass-label">Nova Data de Emissão</label>
-                <input 
-                  type="date" 
-                  value={renewalForm.data_emissao} 
-                  onChange={e => setRenewalForm({ ...renewalForm, data_emissao: e.target.value })}
-                  className="glass-input" 
-                />
-              </div>
-
-              <div className="glass-input-group" style={{ marginBottom: '1rem' }}>
-                <label className="glass-label">Nova Data de Vencimento</label>
-                <input 
-                  type="date" 
-                  value={renewalForm.data_vencimento} 
-                  onChange={e => setRenewalForm({ ...renewalForm, data_vencimento: e.target.value })}
-                  className="glass-input" 
-                />
-              </div>
-
-              <div className="glass-input-group" style={{ marginBottom: '1.25rem' }}>
-                <label className="glass-label">Valor de Renovação Técnico (R$)</label>
-                <input 
-                  type="number" 
-                  step="0.01"
-                  value={renewalForm.valor_renovacao} 
-                  onChange={e => setRenewalForm({ ...renewalForm, valor_renovacao: parseFloat(e.target.value) || 0 })}
-                  className="glass-input" 
-                />
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginTop: '0.5rem' }}>
-                <input 
-                  type="checkbox" 
-                  id="regerar_cond"
-                  checked={renewalForm.regerar_condicionantes} 
-                  onChange={e => setRenewalForm({ ...renewalForm, regerar_condicionantes: e.target.checked })}
-                  style={{ width: '17px', height: '17px', cursor: 'pointer' }}
-                />
-                <label htmlFor="regerar_cond" style={{ fontSize: '0.85rem', color: 'var(--text-main)', cursor: 'pointer', fontWeight: '500' }}>
-                  Regerar condicionantes para o novo ciclo
-                </label>
-              </div>
-            </div>
-            <div style={styles.modalFooter}>
-              <button 
-                onClick={() => setRenewingDoc(null)} 
-                className="glass-btn"
-                style={{ padding: '0.5rem 1.25rem' }}
-              >
-                Cancelar
-              </button>
-              <button 
-                onClick={handleRenewSubmit} 
-                className="glass-btn glass-btn-primary"
-                style={{ padding: '0.5rem 1.25rem' }}
-                disabled={submittingRenewal}
-              >
-                {submittingRenewal ? 'Processando...' : 'Confirmar Renovação'}
-              </button>
-            </div>
-          </div>
         </div>
       )}
     </div>
