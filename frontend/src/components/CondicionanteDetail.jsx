@@ -112,6 +112,19 @@ export default function CondicionanteDetail({ taskId, user, onBack, onGoToCompan
     }
   };
 
+  const handleUpdateCustoProjetado = async (custo) => {
+    try {
+      const parsed = parseFloat(custo) || 0.0;
+      const updated = await api.updateTarefa(task._id, {
+        custo_projetado: parsed
+      }, `Alterou o custo projetado para R$ ${parsed.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`);
+      setTask(updated);
+      showToast('success', 'Custo projetado atualizado com sucesso!');
+    } catch (err) {
+      showToast('error', err.message || 'Falha ao atualizar custo projetado.');
+    }
+  };
+
   const handleNotify = async () => {
     setNotifying(true);
     try {
@@ -279,11 +292,40 @@ export default function CondicionanteDetail({ taskId, user, onBack, onGoToCompan
               </div>
 
               <div style={styles.infoField}>
-                <span style={styles.fieldLabel}>Custo / Valor Estimado</span>
+                <span style={styles.fieldLabel}>Valor Estimado (Receita)</span>
                 <span style={{ fontSize: '1rem', fontWeight: '750', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
                   <DollarSign size={16} />
                   R$ {task.valor_estimado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </span>
+              </div>
+
+              <div style={styles.infoField}>
+                <span style={styles.fieldLabel}>Custo Projetado</span>
+                {user.role === 'admin' || user.role === 'consultor' ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', marginTop: '0.25rem' }}>
+                    <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>R$</span>
+                    <input 
+                      type="number"
+                      step="0.01"
+                      key={task._id + '_' + (task.custo_projetado || 0)}
+                      defaultValue={task.custo_projetado || 0}
+                      onBlur={e => handleUpdateCustoProjetado(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          handleUpdateCustoProjetado(e.target.value);
+                          e.target.blur();
+                        }
+                      }}
+                      className="glass-input"
+                      style={{ fontSize: '0.9rem', padding: '0.25rem 0.5rem', width: '100%' }}
+                    />
+                  </div>
+                ) : (
+                  <span style={{ fontSize: '1rem', fontWeight: '750', color: 'var(--warning)', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                    <DollarSign size={16} />
+                    R$ {(task.custo_projetado || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </span>
+                )}
               </div>
 
               <div style={styles.infoField}>

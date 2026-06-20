@@ -21,6 +21,7 @@ class TarefaBase(BaseModel):
     responsavel_id: PyObjectId = Field(..., description="Usuário responsável pela execução (consultor ou cliente)")
     data_vencimento: datetime
     valor_estimado: float = Field(default=0.0, description="Receita cobrada ao executar esta condicionante")
+    custo_projetado: float = Field(default=0.0, description="Custo projetado para a execução desta condicionante")
     data_conclusao: Optional[datetime] = None
     comprovante_url: Optional[str] = None
     comprovante_key: Optional[str] = Field(default=None, description="Nome da chave/objeto no MinIO correspondente ao comprovante")
@@ -43,6 +44,7 @@ class TarefaUpdate(BaseModel):
     responsavel_id: Optional[PyObjectId] = None
     data_vencimento: Optional[datetime] = None
     valor_estimado: Optional[float] = None
+    custo_projetado: Optional[float] = None
     data_conclusao: Optional[datetime] = None
     comprovante_url: Optional[str] = None
     comprovante_key: Optional[str] = None

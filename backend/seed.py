@@ -354,6 +354,7 @@ async def run_seed():
                         responsavel_id=resp_id,
                         data_vencimento=data_corrente,
                         valor_estimado=cond.valor_sugerido,
+                        custo_projetado=cond.valor_sugerido * 0.7,
                         periodicidade=periodicidade,
                         historico_observacoes=[
                             HistoricoObservacao(
@@ -386,6 +387,7 @@ async def run_seed():
             responsavel_id=cliente_id,
             data_vencimento=data_vencimento_extra,
             valor_estimado=0.0,
+            custo_projetado=0.0,
             periodicidade="Semanal" if idx % 2 == 0 else "Diária",
             historico_observacoes=[HistoricoObservacao(usuario_id=admin_id, texto="Tarefa avulsa distribuída cadastrada via Seeder.")]
         )
