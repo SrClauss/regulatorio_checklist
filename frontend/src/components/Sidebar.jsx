@@ -9,7 +9,8 @@ import {
   LogOut, 
   User,
   WifiOff,
-  Building
+  Building,
+  BarChart3
 } from 'lucide-react';
 
 export default function Sidebar({ user, activeTab, setActiveTab, onLogout, isOnline }) {
@@ -18,6 +19,7 @@ export default function Sidebar({ user, activeTab, setActiveTab, onLogout, isOnl
     { id: 'empresas', label: 'Empresas', icon: Building, roles: ['admin', 'consultor'] },
     { id: 'documentos', label: 'Documentos & Licenças', icon: FileText, roles: ['admin', 'consultor', 'cliente'] },
     { id: 'calendario', label: 'Calendário', icon: Calendar, roles: ['admin', 'consultor', 'cliente'] },
+    { id: 'relatorios', label: 'Relatórios', icon: BarChart3, roles: ['admin', 'consultor', 'cliente'] },
     { id: 'cadastros', label: 'Cadastros & Painel', icon: Settings, roles: ['admin'] },
   ];
 

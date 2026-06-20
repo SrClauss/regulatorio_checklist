@@ -7,6 +7,7 @@ import Calendario from './components/Calendario';
 import Cadastros from './components/Cadastros';
 import Empresas from './components/Empresas';
 import Documentos from './components/Documentos';
+import Relatorios from './components/Relatorios';
 import EmpresaDetail from './components/EmpresaDetail';
 import DocumentoDetail from './components/DocumentoDetail';
 import CondicionanteDetail from './components/CondicionanteDetail';
@@ -135,6 +136,8 @@ function App() {
             onViewDocument={handleViewDocument} 
           />
         );
+      case 'relatorios':
+        return <Relatorios user={user} />;
       case 'cadastros':
         return <Cadastros user={user} />;
       case 'empresa-detail':
