@@ -15,6 +15,8 @@ from app.models.usuario import UsuarioDB
 from app.models.empresa import EmpresaDB
 from app.models.documento import DocumentoDB
 from app.models.tarefa import TarefaDB, HistoricoObservacao
+from app.models.prestador import PrestadorDB
+from app.models.classe_servico import ClasseServicoDB
 
 # Função utilitária para adicionar meses
 def add_months(sourcedate: datetime, months: int) -> datetime:
@@ -39,6 +41,8 @@ async def run_seed():
     await db.tarefas.delete_many({})
     await db.templates_documentos.delete_many({})
     await db.inscricoes_push.delete_many({})
+    await db.prestadores.delete_many({})
+    await db.classe_servicos.delete_many({})
     
     # 2. Cria Usuários Iniciais de Consultoria
     print("Cadastrando equipe técnica...")
@@ -68,6 +72,66 @@ async def run_seed():
     print(f"-> Admin criado: admin@consultoria.com.br")
     print(f"-> Consultor criado: roberto@consultoria.com.br")
     
+    # 2b. Cria Prestadores de Serviço Mock
+    print("Cadastrando prestadores de serviço...")
+    
+    prestador_controlx = PrestadorDB(nome="Dedetizadora Control-X", cnpj="10.222.333/0001-99", contato="contato@controlx.com.br", ativo=True)
+    p_res1 = await db.prestadores.insert_one(prestador_controlx.model_dump(by_alias=True, exclude={"id"}))
+    pid_controlx = p_res1.inserted_id
+
+    prestador_aquaclean = PrestadorDB(nome="Laboratório AquaClean", cnpj="20.333.444/0001-88", contato="laudo@aquaclean.com.br", ativo=True)
+    p_res2 = await db.prestadores.insert_one(prestador_aquaclean.model_dump(by_alias=True, exclude={"id"}))
+    pid_aquaclean = p_res2.inserted_id
+
+    prestador_calibramed = PrestadorDB(nome="CalibraMed Equipamentos", cnpj="30.444.555/0001-77", contato="assistencia@calibramed.com.br", ativo=True)
+    p_res3 = await db.prestadores.insert_one(prestador_calibramed.model_dump(by_alias=True, exclude={"id"}))
+    pid_calibramed = p_res3.inserted_id
+
+    prestador_solucoes = PrestadorDB(nome="Soluções Ambientais PGRSS", cnpj="40.555.666/0001-66", contato="contato@solucoesambientais.com.br", ativo=True)
+    p_res4 = await db.prestadores.insert_one(prestador_solucoes.model_dump(by_alias=True, exclude={"id"}))
+    pid_solucoes = p_res4.inserted_id
+
+    print("-> 4 Prestadores de Serviço cadastrados.")
+
+    # 2c. Cria Classes de Serviço Mock
+    print("Cadastrando classes de serviço...")
+    
+    classes_data = [
+        ("Dedetização / Controle de Pragas", "Serviços periódicos de desinsectização e controle integrado de vetores.", pid_controlx),
+        ("Análise de Potabilidade de Água", "Coleta e análise físico-química de amostras de água de consumo.", pid_aquaclean),
+        ("Calibração de Termômetros e Balanças", "Serviços de aferição de equipamentos de medição.", pid_calibramed),
+        ("Elaboração/Revisão do PGRSS", "Documento do Plano de Gerenciamento de Resíduos de Serviços de Saúde.", pid_solucoes),
+        ("Teste de Estanqueidade do Sistema", "Verificação técnica contra vazamentos em tanques subterrâneos.", pid_solucoes),
+        ("Limpeza e Laudo da Caixa SAO", "Remoção de lodo e aferição de separador de água e óleo.", pid_controlx),
+        ("Relatório Anual RAPP IBAMA", "Preenchimento e emissão do relatório anual do Ibama.", pid_solucoes)
+    ]
+    
+    class_map = {}
+    for nome, desc, pid in classes_data:
+        cs = ClasseServicoDB(nome=nome, descricao=desc, prestador_id=pid, ativo=True)
+        cs_res = await db.classe_servicos.insert_one(cs.model_dump(by_alias=True, exclude={"id"}))
+        class_map[nome] = cs_res.inserted_id
+
+    print("-> 7 Classes de Serviço cadastradas.")
+
+    def get_classe_servico_id_for_title(title: str):
+        title_lower = title.lower()
+        if "dedetização" in title_lower or "pragas" in title_lower:
+            return class_map.get("Dedetização / Controle de Pragas")
+        elif "potabilidade" in title_lower or "análise de água" in title_lower:
+            return class_map.get("Análise de Potabilidade de Água")
+        elif "calibração" in title_lower or "termômetro" in title_lower or "balança" in title_lower:
+            return class_map.get("Calibração de Termômetros e Balanças")
+        elif "pgrss" in title_lower:
+            return class_map.get("Elaboração/Revisão do PGRSS")
+        elif "estanqueidade" in title_lower:
+            return class_map.get("Teste de Estanqueidade do Sistema")
+        elif "caixa sao" in title_lower or "limpeza e laudo" in title_lower:
+            return class_map.get("Limpeza e Laudo da Caixa SAO")
+        elif "rapp ibama" in title_lower or "ibama" in title_lower:
+            return class_map.get("Relatório Anual RAPP IBAMA")
+        return None
+
     # 3. Cria Templates de Documentos por Segmento
     print("Cadastrando templates de referência...")
     
@@ -281,6 +345,7 @@ async def run_seed():
                     nova_tarefa = TarefaDB(
                         documento_id=doc_id,
                         empresa_id=emp_id,
+                        classe_servico_id=get_classe_servico_id_for_title(cond.titulo),
                         titulo=cond.titulo,
                         descricao=f"Condicionante periódica de {cond.titulo} vinculada ao documento {template.nome_documento}.",
                         tipo_id="checklist_interno",
@@ -312,6 +377,7 @@ async def run_seed():
         t_extra = TarefaDB(
             documento_id=None,
             empresa_id=emp_id,
+            classe_servico_id=get_classe_servico_id_for_title(f"Checklist de Auditoria Interna - {emp['fantasia']}"),
             titulo=f"Checklist de Auditoria Interna - {emp['fantasia']}",
             descricao=f"Auditoria interna geral e verificação semanal de compliance de rotina.",
             tipo_id="checklist_interno",
