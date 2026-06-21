@@ -56,6 +56,17 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  const [selectedMobileMonthKey, setSelectedMobileMonthKey] = useState(`${new Date().getFullYear()}-${new Date().getMonth()}`);
+  const [expandedMobileTaskIds, setExpandedMobileTaskIds] = useState([]);
+
+  const toggleMobileTaskExpansion = (taskId) => {
+    setExpandedMobileTaskIds(prev => 
+      prev.includes(taskId) 
+        ? prev.filter(id => id !== taskId) 
+        : [...prev, taskId]
+    );
+  };
+
   // Refs para física de inércia do timeline
   const containerRef = useRef(null);
   const isDownRef = useRef(false);
@@ -259,95 +270,155 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   };
 
   const renderVerticalTimeline = (months, tasksToRender) => {
+    const activeMonthKey = selectedMobileMonthKey || `${new Date().getFullYear()}-${new Date().getMonth()}`;
+    const mTasks = tasksToRender.filter(t => {
+      if (!t.data_vencimento) return false;
+      const d = new Date(t.data_vencimento);
+      return `${d.getFullYear()}-${d.getMonth()}` === activeMonthKey;
+    });
+
     return (
       <div style={styles.verticalTimelineContainer}>
-        {months.map((m) => {
-          let mTasks = tasksToRender.filter(t => {
-            if (!t.data_vencimento) return false;
-            const d = new Date(t.data_vencimento);
-            return d.getMonth() === m.month && d.getFullYear() === m.year;
-          });
+        {/* Seletor Horizontal de Meses */}
+        <div style={styles.mobileMonthSelectorContainer}>
+          <div style={styles.mobileMonthSelectorScroll}>
+            {months.map((m) => {
+              const isActive = m.key === activeMonthKey;
+              const hasTasks = tasksToRender.some(t => {
+                if (!t.data_vencimento) return false;
+                const d = new Date(t.data_vencimento);
+                return `${d.getFullYear()}-${d.getMonth()}` === m.key;
+              });
 
-          if (mTasks.length === 0) return null;
+              return (
+                <button
+                  key={m.key}
+                  onClick={() => setSelectedMobileMonthKey(m.key)}
+                  style={{
+                    ...styles.mobileMonthTab,
+                    ...(isActive ? styles.mobileMonthTabActive : {}),
+                  }}
+                >
+                  <span style={styles.mobileMonthTabLabel}>{m.label}</span>
+                  {hasTasks && <span style={{
+                    ...styles.mobileMonthDot,
+                    background: isActive ? '#ffffff' : 'var(--primary)'
+                  }}></span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
-          return (
-            <div key={m.key} style={styles.verticalMonthSection}>
-              <div style={styles.verticalMonthHeader}>
-                <h4 style={styles.verticalMonthTitle}>{m.label}</h4>
-                <span style={styles.verticalMonthBadge}>
-                  {mTasks.length} {mTasks.length === 1 ? 'tarefa' : 'tarefas'}
-                </span>
-              </div>
+        {/* Lista de tarefas do mês ativo */}
+        <div style={styles.verticalTasksList}>
+          {mTasks.length === 0 ? (
+            <div style={styles.emptyTasksMobile}>
+              Nenhuma tarefa neste mês.
+            </div>
+          ) : (
+            mTasks.map((t) => {
+              const day = new Date(t.data_vencimento).getDate();
+              const color = getTaskStatusColor(t);
+              const csNome = getClasseServicoNome(t.classe_servico_id);
+              const empresaNome = getEmpresaNome(t.empresa_id);
+              const isExpanded = expandedMobileTaskIds.includes(t._id);
+              const displayTitle = showOnlyServiceClass ? csNome : t.titulo;
               
-              <div style={styles.verticalTasksList}>
-                {mTasks.map((t) => {
-                  const day = new Date(t.data_vencimento).getDate();
-                  const color = getTaskStatusColor(t);
-                  const csNome = getClasseServicoNome(t.classe_servico_id);
-                  const empresaNome = getEmpresaNome(t.empresa_id);
-                  const displayTitle = showOnlyServiceClass ? csNome : t.titulo;
+              return (
+                <div key={t._id} style={styles.verticalTaskRow}>
+                  <div style={styles.verticalTimelineAxis}>
+                    <div style={{ ...styles.verticalTimelineDot, background: color }}></div>
+                    <div style={styles.verticalTimelineLine}></div>
+                  </div>
                   
-                  return (
-                    <div key={t._id} style={styles.verticalTaskRow}>
-                      <div style={styles.verticalTimelineAxis}>
-                        <div style={{ ...styles.verticalTimelineDot, background: color }}></div>
-                        <div style={styles.verticalTimelineLine}></div>
+                  <div 
+                    style={{
+                      ...styles.verticalTaskCard,
+                      borderLeftColor: color,
+                    }}
+                    onClick={() => toggleMobileTaskExpansion(t._id)}
+                  >
+                    <div style={styles.verticalCardHeader}>
+                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                        <span style={{ ...styles.tagMini, ...getTaskStatusBadgeStyle(t) }}>
+                          Dia {day}
+                        </span>
+                        <span style={styles.verticalCardCompany} title={empresaNome}>
+                          {empresaNome}
+                        </span>
                       </div>
                       
-                      <div 
-                        style={{
-                          ...styles.verticalTaskCard,
-                          borderLeftColor: color,
-                        }}
-                        onClick={() => onViewTask && onViewTask(t._id)}
-                      >
-                        <div style={styles.verticalCardHeader}>
-                          <span style={{ ...styles.tagMini, ...getTaskStatusBadgeStyle(t) }}>
-                            Dia {day}
-                          </span>
-                          <span style={styles.verticalCardCompany} title={empresaNome}>
-                            {empresaNome}
-                          </span>
-                        </div>
-                        
-                        <h5 style={styles.verticalCardTitle}>{displayTitle}</h5>
-                        
-                        <div style={styles.verticalCardExpandedContent}>
-                          <div style={styles.expandedField}>
-                            <strong>Documento:</strong> {getDocumentoInfo(t.documento_id)}
-                          </div>
-                          <div style={styles.expandedField}>
-                            <strong>Classe:</strong> {csNome}
-                          </div>
-                          {getPrestadorNome(t.classe_servico_id) && (
-                            <div style={styles.expandedField}>
-                              <strong>Prestador:</strong> {getPrestadorNome(t.classe_servico_id)}
-                            </div>
-                          )}
-                        </div>
-                        
-                        <div style={styles.verticalCardFooter}>
-                          <span style={styles.verticalCardVal}>R$ {t.valor_estimado || 0}</span>
-                          <div style={{ display: 'flex', gap: '8px' }}>
-                            {t.status !== 'Concluído' && (
-                              <button 
-                                style={styles.actionMicroBtn} 
-                                onClick={(e) => { e.stopPropagation(); handleConcludeTask(t._id); }}
-                                title="Concluir condicionante"
-                              >
-                                <CheckCircle2 size={12} color="var(--success)" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
+                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
+                        {t.classe_servico_id && (
+                          <button
+                            style={{
+                              ...styles.isolateBtn,
+                              background: selectedClasseServicoId === t.classe_servico_id ? 'var(--primary)' : 'rgba(0, 0, 0, 0.04)',
+                              color: selectedClasseServicoId === t.classe_servico_id ? 'white' : 'var(--text-muted)'
+                            }}
+                            onClick={() => setSelectedClasseServicoId(selectedClasseServicoId === t.classe_servico_id ? null : t.classe_servico_id)}
+                            title="Filtro de Classe"
+                          >
+                            <Filter size={10} />
+                          </button>
+                        )}
+                        {t.status !== 'Concluído' && (
+                          <button 
+                            style={styles.actionMicroBtn} 
+                            onClick={() => handleConcludeTask(t._id)}
+                            title="Concluir"
+                          >
+                            <CheckCircle2 size={12} color="var(--success)" />
+                          </button>
+                        )}
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
+                    
+                    <h5 style={styles.verticalCardTitle}>{displayTitle}</h5>
+                    
+                    {/* Área que expande/encolhe */}
+                    {isExpanded && (
+                      <div style={styles.verticalCardExpandedContent} className="animate-fade-in">
+                        <div style={styles.expandedField}>
+                          <strong>Documento:</strong> {getDocumentoInfo(t.documento_id)}
+                        </div>
+                        <div style={styles.expandedField}>
+                          <strong>Classe:</strong> {csNome}
+                        </div>
+                        {getPrestadorNome(t.classe_servico_id) && (
+                          <div style={styles.expandedField}>
+                            <strong>Prestador:</strong> {getPrestadorNome(t.classe_servico_id)}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
+                    <div style={styles.verticalCardFooter}>
+                      <span style={styles.verticalCardVal}>R$ {t.valor_estimado || 0}</span>
+                      
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
+                        <button 
+                          style={styles.verticalCardExpandBtn}
+                          onClick={() => toggleMobileTaskExpansion(t._id)}
+                        >
+                          {isExpanded ? 'Ver menos' : 'Ver mais'}
+                        </button>
+                        
+                        <button 
+                          style={styles.verticalCardDetailsBtn}
+                          onClick={() => onViewTask && onViewTask(t._id)}
+                        >
+                          Acessar <TrendingUp size={12} style={{ marginLeft: '2px' }} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
       </div>
     );
   };
@@ -1743,30 +1814,57 @@ const styles = {
     gap: '1.5rem',
     padding: '0.25rem',
   },
-  verticalMonthSection: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.75rem',
-  },
-  verticalMonthHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '0.5rem 0',
+  mobileMonthSelectorContainer: {
+    width: '100%',
+    overflow: 'hidden',
+    marginBottom: '0.5rem',
     borderBottom: '1px solid var(--glass-border)',
+    paddingBottom: '0.75rem',
   },
-  verticalMonthTitle: {
-    fontSize: '1rem',
-    fontWeight: '700',
+  mobileMonthSelectorScroll: {
+    display: 'flex',
+    gap: '0.5rem',
+    overflowX: 'auto',
+    scrollbarWidth: 'none',
+    msOverflowStyle: 'none',
+    padding: '2px 0',
+    WebkitOverflowScrolling: 'touch',
+  },
+  mobileMonthTab: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '0.5rem 1rem',
+    borderRadius: '20px',
+    border: '1px solid var(--glass-border)',
+    background: 'rgba(255, 255, 255, 0.4)',
     color: 'var(--text-main)',
+    fontSize: '0.8rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+    transition: 'all 0.2s',
+  },
+  mobileMonthTabActive: {
+    background: 'var(--primary)',
+    color: '#ffffff',
+    border: '1px solid var(--primary)',
+    boxShadow: '0 4px 12px rgba(37, 99, 235, 0.2)',
+  },
+  mobileMonthTabLabel: {
     textTransform: 'capitalize',
   },
-  verticalMonthBadge: {
-    fontSize: '0.75rem',
-    color: 'var(--text-muted)',
-    background: 'rgba(0, 0, 0, 0.04)',
-    padding: '0.2rem 0.6rem',
-    borderRadius: '8px',
+  mobileMonthDot: {
+    width: '6px',
+    height: '6px',
+    borderRadius: '50%',
+  },
+  emptyTasksMobile: {
+    padding: '2.5rem 1rem',
+    textAlign: 'center',
+    color: 'var(--text-light)',
+    fontStyle: 'italic',
+    fontSize: '0.85rem',
   },
   verticalTasksList: {
     display: 'flex',
@@ -1829,7 +1927,7 @@ const styles = {
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
-    maxWidth: '150px',
+    maxWidth: '120px',
   },
   verticalCardTitle: {
     fontSize: '0.875rem',
@@ -1856,5 +1954,25 @@ const styles = {
     fontSize: '0.75rem',
     fontWeight: '700',
     color: 'var(--text-main)',
+  },
+  verticalCardExpandBtn: {
+    border: 'none',
+    background: 'transparent',
+    color: 'var(--primary)',
+    fontSize: '0.725rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+    padding: 0,
+  },
+  verticalCardDetailsBtn: {
+    border: 'none',
+    background: 'transparent',
+    color: 'var(--text-light)',
+    fontSize: '0.725rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+    padding: 0,
+    display: 'flex',
+    alignItems: 'center',
   },
 };
