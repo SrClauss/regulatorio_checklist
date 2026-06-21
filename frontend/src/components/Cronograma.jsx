@@ -429,8 +429,6 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                                 ...styles.timelineCompactCard,
                                 ...(isEven ? styles.cardEven : styles.cardOdd),
                                 ...(isHovered && {
-                                  bottom: 'auto',
-                                  top: isEven ? '12px' : '55px',
                                   transform: 'translateX(-50%) scale(1.08)',
                                   background: '#ffffff',
                                   zIndex: 100,
@@ -1143,6 +1141,7 @@ const styles = {
   timelineCompactCard: {
     position: 'absolute',
     left: '50%',
+    transform: 'translateX(-50%)',
     width: '190px',
     background: 'rgba(255, 255, 255, 0.85)',
     border: '1px solid var(--glass-border)',
