@@ -45,6 +45,17 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   const [hoveredRadarTask, setHoveredRadarTask] = useState(null);
   const [radarTooltipPos, setRadarTooltipPos] = useState({ x: 0, y: 0 });
 
+  // Responsividade
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // Refs para física de inércia do timeline
   const containerRef = useRef(null);
   const isDownRef = useRef(false);
@@ -250,6 +261,103 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   // ==========================================
   // VIEW 1: LINHA DO TEMPO STACKED (TIMELINE)
   // ==========================================
+  const renderVerticalTimeline = (months, tasksToRender) => {
+    return (
+      <div style={styles.verticalTimelineContainer}>
+        {months.map((m) => {
+          let mTasks = tasksToRender.filter(t => {
+            if (!t.data_vencimento) return false;
+            const d = new Date(t.data_vencimento);
+            return d.getMonth() === m.month && d.getFullYear() === m.year;
+          });
+
+          if (mTasks.length === 0) return null;
+
+          return (
+            <div key={m.key} style={styles.verticalMonthSection}>
+              <div style={styles.verticalMonthHeader}>
+                <h4 style={styles.verticalMonthTitle}>{m.label}</h4>
+                <span style={styles.verticalMonthBadge}>
+                  {mTasks.length} {mTasks.length === 1 ? 'tarefa' : 'tarefas'}
+                </span>
+              </div>
+              
+              <div style={styles.verticalTasksList}>
+                {mTasks.map((t) => {
+                  const day = new Date(t.data_vencimento).getDate();
+                  const color = getTaskStatusColor(t);
+                  const csNome = getClasseServicoNome(t.classe_servico_id);
+                  const empresaNome = getEmpresaNome(t.empresa_id);
+                  const displayTitle = showOnlyServiceClass ? csNome : t.titulo;
+                  
+                  return (
+                    <div key={t._id} style={styles.verticalTaskRow}>
+                      <div style={styles.verticalTimelineAxis}>
+                        <div style={{ ...styles.verticalTimelineDot, background: color }}></div>
+                        <div style={styles.verticalTimelineLine}></div>
+                      </div>
+                      
+                      <div 
+                        style={{
+                          ...styles.verticalTaskCard,
+                          borderLeftColor: color,
+                        }}
+                        onClick={() => onViewTask && onViewTask(t._id)}
+                      >
+                        <div style={styles.verticalCardHeader}>
+                          <span style={{ ...styles.tagMini, ...getTaskStatusBadgeStyle(t) }}>
+                            Dia {day}
+                          </span>
+                          <span style={styles.verticalCardCompany} title={empresaNome}>
+                            {empresaNome}
+                          </span>
+                        </div>
+                        
+                        <h5 style={styles.verticalCardTitle}>{displayTitle}</h5>
+                        
+                        <div style={styles.verticalCardExpandedContent}>
+                          <div style={styles.expandedField}>
+                            <strong>Documento:</strong> {getDocumentoInfo(t.documento_id)}
+                          </div>
+                          <div style={styles.expandedField}>
+                            <strong>Classe:</strong> {csNome}
+                          </div>
+                          {getPrestadorNome(t.classe_servico_id) && (
+                            <div style={styles.expandedField}>
+                              <strong>Prestador:</strong> {getPrestadorNome(t.classe_servico_id)}
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div style={styles.verticalCardFooter}>
+                          <span style={styles.verticalCardVal}>R$ {t.valor_estimado || 0}</span>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            {t.status !== 'Concluído' && (
+                              <button 
+                                style={styles.actionMicroBtn} 
+                                onClick={(e) => { e.stopPropagation(); handleConcludeTask(t._id); }}
+                                title="Concluir condicionante"
+                              >
+                                <CheckCircle2 size={12} color="var(--success)" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  // ==========================================
+  // VIEW 1: LINHA DO TEMPO STACKED (TIMELINE)
+  // ==========================================
   const renderTimelineView = () => {
     const now = new Date();
     const currentMonth = now.getMonth();
@@ -269,8 +377,19 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
 
     const tasksToRender = getFilteredTasks();
 
+    const wrapperStyle = {
+      ...styles.timelineWrapper,
+      padding: isMobile ? '0.75rem' : '1.5rem',
+      borderRadius: isMobile ? '16px' : '24px',
+    };
+
+    const containerStyle = {
+      ...styles.timelineContainer,
+      maxHeight: isMobile ? 'none' : '75vh',
+    };
+
     return (
-      <div style={styles.timelineWrapper}>
+      <div style={wrapperStyle}>
         <div style={styles.timelineControlBar}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
             <div style={styles.toggleContainer}>
@@ -294,21 +413,26 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
             )}
           </div>
 
-          <div style={styles.horizontalNavBtns}>
-            <button style={styles.todayBtn} onClick={handleResetCenter}>Hoje</button>
-            <button style={styles.navCircleBtn} onClick={handleScrollLeft}><ChevronLeft size={18} /></button>
-            <button style={styles.navCircleBtn} onClick={handleScrollRight}><ChevronRight size={18} /></button>
-          </div>
+          {!isMobile && (
+            <div style={styles.horizontalNavBtns}>
+              <button style={styles.todayBtn} onClick={handleResetCenter}>Hoje</button>
+              <button style={styles.navCircleBtn} onClick={handleScrollLeft}><ChevronLeft size={18} /></button>
+              <button style={styles.navCircleBtn} onClick={handleScrollRight}><ChevronRight size={18} /></button>
+            </div>
+          )}
         </div>
 
-        <div 
-          ref={containerRef}
-          style={{ ...styles.timelineContainer, cursor: isDragging ? 'grabbing' : 'grab' }}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUpOrLeave}
-          onMouseLeave={handleMouseUpOrLeave}
-        >
+        {isMobile ? (
+          renderVerticalTimeline(months, tasksToRender)
+        ) : (
+          <div 
+            ref={containerRef}
+            style={{ ...containerStyle, cursor: isDragging ? 'grabbing' : 'grab' }}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUpOrLeave}
+            onMouseLeave={handleMouseUpOrLeave}
+          >
           <div style={styles.timelineGrid}>
             <div style={styles.rulerRow}>
               <div style={styles.rulerMonthPlaceholder}></div>
@@ -515,6 +639,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
             })}
           </div>
         </div>
+        )}
       </div>
     );
   };
@@ -1003,7 +1128,7 @@ const styles = {
   },
   timelineContainer: {
     width: '100%',
-    maxHeight: '600px',
+    maxHeight: '75vh',
     overflow: 'auto',
     borderRadius: '16px',
     border: '1px solid var(--glass-border)',
@@ -1611,5 +1736,127 @@ const styles = {
     border: '4px solid var(--glass-border)',
     borderTopColor: 'var(--primary)',
     borderRadius: '50%',
+  },
+
+  // STYLES: Mobile Vertical Timeline
+  verticalTimelineContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1.5rem',
+    padding: '0.25rem',
+  },
+  verticalMonthSection: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.75rem',
+  },
+  verticalMonthHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '0.5rem 0',
+    borderBottom: '1px solid var(--glass-border)',
+  },
+  verticalMonthTitle: {
+    fontSize: '1rem',
+    fontWeight: '700',
+    color: 'var(--text-main)',
+    textTransform: 'capitalize',
+  },
+  verticalMonthBadge: {
+    fontSize: '0.75rem',
+    color: 'var(--text-muted)',
+    background: 'rgba(0, 0, 0, 0.04)',
+    padding: '0.2rem 0.6rem',
+    borderRadius: '8px',
+  },
+  verticalTasksList: {
+    display: 'flex',
+    flexDirection: 'column',
+    position: 'relative',
+  },
+  verticalTaskRow: {
+    display: 'flex',
+    gap: '1rem',
+    position: 'relative',
+  },
+  verticalTimelineAxis: {
+    width: '16px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  verticalTimelineDot: {
+    width: '12px',
+    height: '12px',
+    borderRadius: '50%',
+    zIndex: 2,
+    marginTop: '1rem',
+  },
+  verticalTimelineLine: {
+    width: '2px',
+    background: 'var(--glass-border)',
+    position: 'absolute',
+    top: '1rem',
+    bottom: '-1rem',
+    left: '7px',
+    zIndex: 1,
+  },
+  verticalTaskCard: {
+    flex: 1,
+    background: 'rgba(255, 255, 255, 0.65)',
+    border: '1px solid var(--glass-border)',
+    borderLeftWidth: '4px',
+    borderRadius: '12px',
+    padding: '1rem',
+    marginBottom: '1rem',
+    cursor: 'pointer',
+    textAlign: 'left',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.5rem',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.02)',
+    transition: 'all 0.2s',
+  },
+  verticalCardHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  verticalCardCompany: {
+    fontSize: '0.75rem',
+    fontWeight: '600',
+    color: 'var(--text-light)',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    maxWidth: '150px',
+  },
+  verticalCardTitle: {
+    fontSize: '0.875rem',
+    fontWeight: '600',
+    color: 'var(--text-main)',
+    margin: 0,
+  },
+  verticalCardExpandedContent: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+    padding: '0.5rem',
+    background: 'rgba(0, 0, 0, 0.02)',
+    borderRadius: '8px',
+    marginTop: '0.25rem',
+  },
+  verticalCardFooter: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: '0.25rem',
+  },
+  verticalCardVal: {
+    fontSize: '0.75rem',
+    fontWeight: '700',
+    color: 'var(--text-main)',
   },
 };
