@@ -258,61 +258,6 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
     });
   };
 
-  // ==========================================
-  // VIEW 1: LINHA DO TEMPO STACKED (TIMELINE)
-  // ==========================================
-  const renderFloatingDetailPanel = () => {
-    if (!hoveredTaskId) return null;
-    const t = todasTarefas.find(task => task._id === hoveredTaskId);
-    if (!t) return null;
-
-    const empresaNome = getEmpresaNome(t.empresa_id);
-    const csNome = getClasseServicoNome(t.classe_servico_id);
-    const docInfo = getDocumentoInfo(t.documento_id);
-    const prestadorNome = getPrestadorNome(t.classe_servico_id);
-    const statusColor = getTaskStatusColor(t);
-
-    return (
-      <div style={styles.floatingDetailPanel} className="animate-fade-in">
-        <div style={{ ...styles.panelHeader, borderLeftColor: statusColor }}>
-          <span style={{ ...styles.tagMini, ...getTaskStatusBadgeStyle(t) }}>
-            {t.status === 'Concluído' ? 'Concluída' : isTaskOverdue(t) ? 'Atrasada' : t.status}
-          </span>
-          <span style={styles.panelDate}>{formatDate(t.data_vencimento)}</span>
-        </div>
-        
-        <h5 style={styles.panelTitle}>{t.titulo}</h5>
-        
-        <div style={styles.panelDivider}></div>
-        
-        <div style={styles.panelBody}>
-          <div style={styles.panelField}>
-            <strong style={{ whiteSpace: 'nowrap' }}>Empresa:</strong>
-            <span style={{ textAlign: 'right', fontWeight: '500' }}>{empresaNome}</span>
-          </div>
-          <div style={styles.panelField}>
-            <strong style={{ whiteSpace: 'nowrap' }}>Documento:</strong>
-            <span style={{ textAlign: 'right', fontWeight: '500' }}>{docInfo}</span>
-          </div>
-          <div style={styles.panelField}>
-            <strong style={{ whiteSpace: 'nowrap' }}>Classe:</strong>
-            <span style={{ textAlign: 'right', fontWeight: '500' }}>{csNome}</span>
-          </div>
-          {prestadorNome && (
-            <div style={styles.panelField}>
-              <strong style={{ whiteSpace: 'nowrap' }}>Prestador:</strong>
-              <span style={{ textAlign: 'right', fontWeight: '500' }}>{prestadorNome}</span>
-            </div>
-          )}
-          <div style={styles.panelField}>
-            <strong style={{ whiteSpace: 'nowrap' }}>Valor:</strong>
-            <span style={{ fontWeight: 'bold', color: 'var(--text-main)' }}>R$ {t.valor_estimado || 0}</span>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   const renderVerticalTimeline = (months, tasksToRender) => {
     return (
       <div style={styles.verticalTimelineContainer}>
@@ -664,7 +609,22 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                                 </div>
                               </div>
 
-                              {/* Detalhes são exibidos no floating panel fixed */}
+                              {isHovered && (
+                                <div style={styles.expandedDetails} className="animate-fade-in">
+                                  <div style={styles.detailDivider}></div>
+                                  <div style={styles.expandedField}>
+                                    <strong>Documento:</strong> {getDocumentoInfo(t.documento_id)}
+                                  </div>
+                                  <div style={styles.expandedField}>
+                                    <strong>Classe:</strong> {csNome}
+                                  </div>
+                                  {getPrestadorNome(t.classe_servico_id) && (
+                                    <div style={styles.expandedField}>
+                                      <strong>Prestador:</strong> {getPrestadorNome(t.classe_servico_id)}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </>
                         </div>
@@ -967,7 +927,6 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
         {activeTab === 'kanban' && renderKanbanView()}
         {activeTab === 'lista' && renderListaView()}
       </div>
-      {renderFloatingDetailPanel()}
     </div>
   );
 }
@@ -1319,7 +1278,8 @@ const styles = {
     transition: 'all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
   },
   cardEven: {
-    bottom: '52px',
+    top: '-95px',
+    bottom: 'auto',
   },
   cardOdd: {
     top: '52px',
@@ -1896,65 +1856,5 @@ const styles = {
     fontSize: '0.75rem',
     fontWeight: '700',
     color: 'var(--text-main)',
-  },
-
-  // STYLES: Floating Detail Panel
-  floatingDetailPanel: {
-    position: 'fixed',
-    bottom: '2rem',
-    right: '2rem',
-    width: '320px',
-    background: 'rgba(255, 255, 255, 0.85)',
-    backdropFilter: 'blur(20px)',
-    WebkitBackdropFilter: 'blur(20px)',
-    border: '1px solid var(--glass-border)',
-    borderLeftWidth: '5px',
-    borderRadius: '16px',
-    padding: '1.25rem',
-    boxShadow: '0 20px 50px rgba(0, 0, 0, 0.15)',
-    zIndex: 9999,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.75rem',
-    textAlign: 'left',
-    pointerEvents: 'none',
-    transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
-  },
-  panelHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderLeft: '4px solid transparent',
-    paddingLeft: '8px',
-  },
-  panelDate: {
-    fontSize: '0.75rem',
-    fontWeight: '700',
-    color: 'var(--text-light)',
-  },
-  panelTitle: {
-    fontSize: '0.95rem',
-    fontWeight: '700',
-    color: 'var(--text-main)',
-    margin: 0,
-    lineHeight: '1.4',
-  },
-  panelDivider: {
-    height: '1px',
-    background: 'var(--glass-border)',
-  },
-  panelBody: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.5rem',
-  },
-  panelField: {
-    fontSize: '0.75rem',
-    color: 'var(--text-muted)',
-    display: 'flex',
-    justifyContent: 'space-between',
-    gap: '0.5rem',
-    lineHeight: '1.4',
-    alignItems: 'flex-start',
   },
 };
