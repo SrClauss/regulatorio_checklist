@@ -383,19 +383,6 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                       </div>
                       
                       <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
-                        {t.classe_servico_id && (
-                          <button
-                            style={{
-                              ...styles.isolateBtn,
-                              background: selectedClasseServicoId === t.classe_servico_id ? 'var(--primary)' : 'rgba(0, 0, 0, 0.04)',
-                              color: selectedClasseServicoId === t.classe_servico_id ? 'white' : 'var(--text-muted)'
-                            }}
-                            onClick={() => setSelectedClasseServicoId(selectedClasseServicoId === t.classe_servico_id ? null : t.classe_servico_id)}
-                            title="Filtro de Classe"
-                          >
-                            <Filter size={10} />
-                          </button>
-                        )}
                         {t.status !== 'Concluído' && (
                           <button 
                             style={styles.actionMicroBtn} 
@@ -498,15 +485,40 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
     return (
       <div style={wrapperStyle}>
         <div style={styles.timelineControlBar}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-            <div style={styles.toggleContainer}>
-              <button 
-                style={showOnlyServiceClass ? styles.activeToggleBtn : styles.toggleBtn}
-                onClick={() => setShowOnlyServiceClass(!showOnlyServiceClass)}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+            {/* Filtro de Classe de Serviço no Cabeçalho */}
+            <div style={styles.filterGroup}>
+              <label style={styles.filterLabel}>Filtrar Classe:</label>
+              <select
+                value={selectedClasseServicoId || ''}
+                onChange={(e) => setSelectedClasseServicoId(e.target.value || null)}
+                className="glass-input glass-select"
+                style={styles.headerSelect}
               >
-                <Activity size={16} />
-                <span>{showOnlyServiceClass ? "Ver Nomes" : "Ver Classes de Serviço"}</span>
-              </button>
+                <option value="">Todas as Classes</option>
+                {classeServicos.map(cs => (
+                  <option key={cs._id} value={cs._id}>{cs.nome}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Estrutura de Filtro e Visualização de Títulos vs Classes */}
+            <div style={styles.filterGroup}>
+              <label style={styles.filterLabel}>Exibir por:</label>
+              <div style={styles.toggleButtonGroup}>
+                <button 
+                  style={!showOnlyServiceClass ? styles.activeToggleSubBtn : styles.toggleSubBtn}
+                  onClick={() => setShowOnlyServiceClass(false)}
+                >
+                  Títulos
+                </button>
+                <button 
+                  style={showOnlyServiceClass ? styles.activeToggleSubBtn : styles.toggleSubBtn}
+                  onClick={() => setShowOnlyServiceClass(true)}
+                >
+                  Classes de Serviço
+                </button>
+              </div>
             </div>
 
             {selectedClasseServicoId && (
@@ -514,8 +526,8 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                 style={styles.clearFilterHeaderBtn} 
                 onClick={() => setSelectedClasseServicoId(null)}
               >
-                <X size={14} />
-                <span>Limpar Filtro ({getClasseServicoNome(selectedClasseServicoId)})</span>
+                <X size={12} />
+                <span>Limpar Filtro</span>
               </button>
             )}
           </div>
@@ -698,22 +710,6 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                                       title="Concluir condicionante"
                                     >
                                       <CheckCircle2 size={12} />
-                                    </button>
-                                  )}
-                                  {t.classe_servico_id && (
-                                    <button
-                                      style={{
-                                        ...styles.isolateBtn,
-                                        background: selectedClasseServicoId === t.classe_servico_id ? 'var(--primary)' : 'rgba(0, 0, 0, 0.04)',
-                                        color: selectedClasseServicoId === t.classe_servico_id ? 'white' : 'var(--text-muted)'
-                                      }}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectedClasseServicoId(selectedClasseServicoId === t.classe_servico_id ? null : t.classe_servico_id);
-                                      }}
-                                      title="Isolar esta classe de serviço"
-                                    >
-                                      <Filter size={10} />
                                     </button>
                                   )}
                                 </div>
@@ -1193,6 +1189,56 @@ const styles = {
     fontWeight: '700',
     cursor: 'pointer',
     boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+  },
+  filterGroup: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+  },
+  filterLabel: {
+    fontSize: '0.8rem',
+    fontWeight: '600',
+    color: 'var(--text-muted)',
+  },
+  headerSelect: {
+    fontSize: '0.825rem',
+    padding: '0.5rem 2rem 0.5rem 0.75rem',
+    borderRadius: '10px',
+    border: '1px solid var(--glass-border)',
+    background: 'rgba(255, 255, 255, 0.6)',
+    color: 'var(--text-main)',
+    width: '230px',
+    cursor: 'pointer',
+    outline: 'none',
+  },
+  toggleButtonGroup: {
+    display: 'flex',
+    background: 'rgba(0, 0, 0, 0.03)',
+    padding: '3px',
+    borderRadius: '10px',
+    border: '1px solid var(--glass-border)',
+  },
+  toggleSubBtn: {
+    padding: '0.4rem 0.9rem',
+    borderRadius: '7px',
+    border: 'none',
+    background: 'transparent',
+    color: 'var(--text-muted)',
+    fontSize: '0.775rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+  },
+  activeToggleSubBtn: {
+    padding: '0.4rem 0.9rem',
+    borderRadius: '7px',
+    border: 'none',
+    background: 'var(--bg-main, #ffffff)',
+    color: 'var(--primary)',
+    fontSize: '0.775rem',
+    fontWeight: '700',
+    cursor: 'pointer',
+    boxShadow: '0 2px 6px rgba(0,0,0,0.05)',
   },
   clearFilterHeaderBtn: {
     display: 'flex',
