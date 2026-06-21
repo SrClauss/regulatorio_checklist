@@ -42,6 +42,33 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
 
   // Estados de Hover
   const [hoveredTaskId, setHoveredTaskId] = useState(null);
+  const hoverTimeoutRef = useRef(null);
+
+  const handleMouseEnterTask = (id) => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+    setHoveredTaskId(id);
+  };
+
+  const handleMouseLeaveTask = () => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+    }
+    hoverTimeoutRef.current = setTimeout(() => {
+      setHoveredTaskId(null);
+    }, 150); // 150ms delay para evitar flickering
+  };
+
+  useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const [hoveredRadarTask, setHoveredRadarTask] = useState(null);
   const [radarTooltipPos, setRadarTooltipPos] = useState({ x: 0, y: 0 });
 
@@ -613,8 +640,8 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                               transform: isHovered ? 'scale(1.4)' : 'scale(1)'
                             }}
                             onClick={() => onViewTask && onViewTask(t._id)}
-                            onMouseEnter={() => setHoveredTaskId(t._id)}
-                            onMouseLeave={() => setHoveredTaskId(null)}
+                             onMouseEnter={() => handleMouseEnterTask(t._id)}
+                             onMouseLeave={handleMouseLeaveTask}
                           ></div>
 
                           <>
@@ -641,8 +668,8 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                                 borderLeftColor: color
                               }}
                               onClick={() => onViewTask && onViewTask(t._id)}
-                              onMouseEnter={() => setHoveredTaskId(t._id)}
-                              onMouseLeave={() => setHoveredTaskId(null)}
+                              onMouseEnter={() => handleMouseEnterTask(t._id)}
+                              onMouseLeave={handleMouseLeaveTask}
                             >
                               <div style={styles.cardHeaderMini}>
                                 <span style={{
