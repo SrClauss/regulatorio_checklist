@@ -179,6 +179,14 @@ body {
   color: var(--text-muted);
 }
 
+.nav-label-desktop {
+  display: inline;
+}
+
+.nav-label-mobile {
+  display: none;
+}
+
 .sidebar-nav-item.active .sidebar-nav-label {
   color: #2563eb;
   font-weight: 600;
@@ -325,8 +333,8 @@ body {
 
   .sidebar-nav-item {
     flex-direction: column;
-    padding: 0.5rem;
-    gap: 0.25rem;
+    padding: 0.35rem 0.1rem;
+    gap: 0.15rem;
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
@@ -334,6 +342,12 @@ body {
     justify-content: center;
     width: auto;
     flex: 1;
+    min-width: 0;
+  }
+
+  .sidebar-nav-item svg {
+    width: 18px !important;
+    height: 18px !important;
   }
 
   .sidebar-nav-item.active {
@@ -341,7 +355,20 @@ body {
   }
 
   .sidebar-nav-label {
-    font-size: 0.65rem;
+    font-size: 0.6rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    text-align: center;
+  }
+
+  .nav-label-desktop {
+    display: none;
+  }
+
+  .nav-label-mobile {
+    display: block;
   }
 }
 

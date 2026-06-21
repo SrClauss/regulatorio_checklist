@@ -15,13 +15,13 @@ import {
 
 export default function Sidebar({ user, activeTab, setActiveTab, onLogout, isOnline }) {
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'consultor'] },
-    { id: 'empresas', label: 'Empresas', icon: Building, roles: ['admin', 'consultor'] },
-    { id: 'documentos', label: 'Documentos & Licenças', icon: FileText, roles: ['admin', 'consultor', 'cliente'] },
+    { id: 'dashboard', label: 'Dashboard', shortLabel: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'consultor'] },
+    { id: 'empresas', label: 'Empresas', shortLabel: 'Empresas', icon: Building, roles: ['admin', 'consultor'] },
+    { id: 'documentos', label: 'Documentos & Licenças', shortLabel: 'Documentos', icon: FileText, roles: ['admin', 'consultor', 'cliente'] },
     // Substituindo o calendário direto pelo Cronograma Operacional na navegação principal
-    { id: 'cronograma', label: 'Cronograma', icon: Calendar, roles: ['admin', 'consultor', 'cliente'] },
-    { id: 'relatorios', label: 'Relatórios', icon: BarChart3, roles: ['admin', 'consultor', 'cliente'] },
-    { id: 'cadastros', label: 'Cadastros & Painel', icon: Settings, roles: ['admin'] },
+    { id: 'cronograma', label: 'Cronograma', shortLabel: 'Cronograma', icon: Calendar, roles: ['admin', 'consultor', 'cliente'] },
+    { id: 'relatorios', label: 'Relatórios', shortLabel: 'Relatórios', icon: BarChart3, roles: ['admin', 'consultor', 'cliente'] },
+    { id: 'cadastros', label: 'Cadastros & Painel', shortLabel: 'Cadastros', icon: Settings, roles: ['admin'] },
   ];
 
   const filteredMenuItems = menuItems.filter(item => item.roles.includes(user.role));
@@ -114,7 +114,8 @@ export default function Sidebar({ user, activeTab, setActiveTab, onLogout, isOnl
               >
                 <Icon size={20} color={isActive ? '#2563eb' : 'var(--text-muted)'} />
                 <span className="sidebar-nav-label">
-                  {item.label}
+                  <span className="nav-label-desktop">{item.label}</span>
+                  <span className="nav-label-mobile">{item.shortLabel || item.label}</span>
                 </span>
               </button>
             );
