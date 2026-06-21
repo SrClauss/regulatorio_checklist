@@ -1,4 +1,4 @@
-const API_BASE_URL = '';
+const API_BASE_URL = import.meta.env.DEV ? 'http://localhost:8000' : '';
 
 // Retorna os cabeçalhos de autenticação padrão
 function getHeaders() {

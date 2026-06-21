@@ -18,7 +18,8 @@ export default function Sidebar({ user, activeTab, setActiveTab, onLogout, isOnl
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'consultor'] },
     { id: 'empresas', label: 'Empresas', icon: Building, roles: ['admin', 'consultor'] },
     { id: 'documentos', label: 'Documentos & Licenças', icon: FileText, roles: ['admin', 'consultor', 'cliente'] },
-    { id: 'calendario', label: 'Calendário', icon: Calendar, roles: ['admin', 'consultor', 'cliente'] },
+    // Substituindo o calendário direto pelo Cronograma Operacional na navegação principal
+    { id: 'cronograma', label: 'Cronograma', icon: Calendar, roles: ['admin', 'consultor', 'cliente'] },
     { id: 'relatorios', label: 'Relatórios', icon: BarChart3, roles: ['admin', 'consultor', 'cliente'] },
     { id: 'cadastros', label: 'Cadastros & Painel', icon: Settings, roles: ['admin'] },
   ];

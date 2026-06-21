@@ -3,6 +3,7 @@ import { api } from './api';
 import Login from './components/Login';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
+import Cronograma from './components/Cronograma';
 import Calendario from './components/Calendario';
 import Cadastros from './components/Cadastros';
 import Empresas from './components/Empresas';
@@ -22,19 +23,50 @@ function App() {
   const [selectedCompanyId, setSelectedCompanyId] = useState(null);
   const [selectedDocumentId, setSelectedDocumentId] = useState(null);
 
+  // Analisa o hash da URL e sincroniza os estados correspondentes
+  const parseHash = (currentUser) => {
+    const activeUser = currentUser || user;
+    if (!activeUser) return;
+    
+    const defaultHash = activeUser.role === 'cliente' ? '#/cronograma' : '#/dashboard';
+    const hash = window.location.hash || defaultHash;
+
+    if (hash.startsWith('#/empresas/')) {
+      const id = hash.replace('#/empresas/', '');
+      setSelectedCompanyId(id);
+      setActiveTab('empresa-detail');
+    } else if (hash.startsWith('#/documentos/')) {
+      const id = hash.replace('#/documentos/', '');
+      setSelectedDocumentId(id);
+      setActiveTab('documento-detail');
+    } else if (hash.startsWith('#/condicionantes/')) {
+      const id = hash.replace('#/condicionantes/', '');
+      setSelectedTaskId(id);
+      setActiveTab('condicionante-detail');
+    } else {
+      const tab = hash.replace('#/', '');
+      const validTabs = ['dashboard', 'empresas', 'documentos', 'cronograma', 'relatorios', 'cadastros', 'calendario'];
+      if (validTabs.includes(tab)) {
+        setActiveTab(tab);
+      } else {
+        setActiveTab(activeUser.role === 'cliente' ? 'cronograma' : 'dashboard');
+      }
+      setSelectedTaskId(null);
+      setSelectedCompanyId(null);
+      setSelectedDocumentId(null);
+    }
+  };
+
   const handleViewCompany = (companyId) => {
-    setSelectedCompanyId(companyId);
-    setActiveTab('empresa-detail');
+    window.location.hash = `#/empresas/${companyId}`;
   };
 
   const handleViewDocument = (documentId) => {
-    setSelectedDocumentId(documentId);
-    setActiveTab('documento-detail');
+    window.location.hash = `#/documentos/${documentId}`;
   };
 
   const handleViewTask = (taskId) => {
-    setSelectedTaskId(taskId);
-    setActiveTab('condicionante-detail');
+    window.location.hash = `#/condicionantes/${taskId}`;
   };
 
   useEffect(() => {
@@ -50,6 +82,17 @@ function App() {
     };
   }, []);
 
+  // Escuta as alterações de navegação nativa do navegador (Avançar / Voltar)
+  useEffect(() => {
+    const handleHashChange = () => {
+      if (user) {
+        parseHash(user);
+      }
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, [user]);
+
   useEffect(() => {
     const verifyUser = async () => {
       const token = localStorage.getItem('token');
@@ -57,10 +100,8 @@ function App() {
         try {
           const userData = await api.getMe();
           setUser(userData);
-          if (userData.role === 'cliente') {
-            setActiveTab('calendario');
-          }
-          // Registra push notification se suportado e autenticado
+          // Analisa a URL no primeiro carregamento pós-login
+          parseHash(userData);
           setTimeout(() => registerPushNotifications(), 1500);
         } catch (err) {
           console.error("Token expirado ou inválido.");
@@ -75,7 +116,9 @@ function App() {
 
   const handleLoginSuccess = (userData) => {
     setUser(userData);
-    setActiveTab(userData.role === 'cliente' ? 'calendario' : 'dashboard');
+    const targetHash = userData.role === 'cliente' ? '#/cronograma' : '#/dashboard';
+    window.location.hash = targetHash;
+    parseHash(userData);
     setTimeout(() => registerPushNotifications(), 1000);
   };
 
@@ -84,6 +127,7 @@ function App() {
     setSelectedTaskId(null);
     setSelectedCompanyId(null);
     setSelectedDocumentId(null);
+    window.location.hash = '';
   };
 
   if (checkingAuth) {
@@ -104,13 +148,25 @@ function App() {
 
   // Determina qual conteúdo renderizar com base no activeTab
   const renderContent = () => {
+    const onNavigateTab = (tab) => {
+      window.location.hash = '#/' + tab;
+    };
+
     switch (activeTab) {
       case 'dashboard':
         return (
           <Dashboard 
             user={user} 
-            onViewTask={handleViewTask} 
-            onViewDocument={handleViewDocument} 
+            onNavigateTab={onNavigateTab}
+          />
+        );
+      case 'cronograma':
+        return (
+          <Cronograma
+            user={user}
+            onViewTask={handleViewTask}
+            onViewDocument={handleViewDocument}
+            onNavigateTab={onNavigateTab}
           />
         );
       case 'empresas':
@@ -145,7 +201,7 @@ function App() {
           <EmpresaDetail 
             companyId={selectedCompanyId} 
             user={user} 
-            onBack={() => setActiveTab('empresas')} 
+            onBack={() => { window.location.hash = '#/empresas'; }} 
             onViewDocument={handleViewDocument} 
             onViewTask={handleViewTask} 
           />
@@ -157,9 +213,9 @@ function App() {
             user={user} 
             onBack={() => {
               if (selectedCompanyId) {
-                setActiveTab('empresa-detail');
+                window.location.hash = `#/empresas/${selectedCompanyId}`;
               } else {
-                setActiveTab('calendario');
+                window.location.hash = '#/cronograma';
               }
             }} 
             onGoToCompany={handleViewCompany} 
@@ -173,11 +229,11 @@ function App() {
             user={user} 
             onBack={() => {
               if (selectedDocumentId) {
-                setActiveTab('documento-detail');
+                window.location.hash = `#/documentos/${selectedDocumentId}`;
               } else if (selectedCompanyId) {
-                setActiveTab('empresa-detail');
+                window.location.hash = `#/empresas/${selectedCompanyId}`;
               } else {
-                setActiveTab('calendario');
+                window.location.hash = '#/cronograma';
               }
             }} 
             onGoToCompany={handleViewCompany} 
@@ -188,8 +244,7 @@ function App() {
         return (
           <Dashboard 
             user={user} 
-            onViewTask={handleViewTask} 
-            onViewDocument={handleViewDocument} 
+            onNavigateTab={onNavigateTab}
           />
         );
     }
@@ -202,11 +257,8 @@ function App() {
         user={user} 
         activeTab={activeTab} 
         setActiveTab={(tab) => {
-          // Reset context values when selecting main sidebar tabs
-          setSelectedTaskId(null);
-          setSelectedCompanyId(null);
-          setSelectedDocumentId(null);
-          setActiveTab(tab);
+          // Alteração do hash da URL aciona a navegação
+          window.location.hash = '#/' + tab;
         }} 
         onLogout={handleLogout} 
         isOnline={isOnline}

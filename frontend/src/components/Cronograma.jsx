@@ -1,0 +1,1614 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { api } from '../api';
+import { 
+  CalendarDays, 
+  Bell,
+  LayoutList,
+  ChevronLeft,
+  ChevronRight,
+  Filter,
+  Activity,
+  AlertTriangle,
+  Briefcase,
+  X,
+  CheckCircle2,
+  Clock,
+  Archive,
+  Search,
+  SlidersHorizontal,
+  TrendingUp
+} from 'lucide-react';
+
+export default function Cronograma({ user, onViewTask, onViewDocument, onNavigateTab }) {
+  const [activeTab, setActiveTab] = useState('timeline'); // 'timeline', 'kanban', 'gantt', 'radar', 'lista'
+  
+  const [todasTarefas, setTodasTarefas] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Entidades auxiliares para mapear IDs para nomes
+  const [empresas, setEmpresas] = useState([]);
+  const [documentos, setDocumentos] = useState([]);
+  const [classeServicos, setClasseServicos] = useState([]);
+  const [prestadores, setPrestadores] = useState([]);
+
+  // Filtros Globais do Cronograma
+  const [showOnlyServiceClass, setShowOnlyServiceClass] = useState(false);
+  const [selectedClasseServicoId, setSelectedClasseServicoId] = useState(null);
+
+  // Estado de Busca e Filtro da Aba Lista Analítica
+  const [searchTerm, setSearchTerm] = useState('');
+  const [listCompanyFilter, setListCompanyFilter] = useState('');
+  const [listStatusFilter, setListStatusFilter] = useState('');
+
+  // Estados de Hover
+  const [hoveredTaskId, setHoveredTaskId] = useState(null);
+  const [hoveredRadarTask, setHoveredRadarTask] = useState(null);
+  const [radarTooltipPos, setRadarTooltipPos] = useState({ x: 0, y: 0 });
+
+  // Refs para física de inércia do timeline
+  const containerRef = useRef(null);
+  const isDownRef = useRef(false);
+  const startXRef = useRef(0);
+  const startYRef = useRef(0);
+  const scrollLeftRef = useRef(0);
+  const scrollTopRef = useRef(0);
+  const velocityXRef = useRef(0);
+  const lastXRef = useRef(0);
+  const lastTimeRef = useRef(0);
+  const animationFrameIdRef = useRef(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const fetchCronogramaData = async () => {
+    try {
+      setLoading(true);
+      // Carrega todas as tarefas (sem filtrar por Pendente para ter concluídas no Kanban e Lista)
+      const [empList, docList, csList, prList, tarefas] = await Promise.all([
+        api.listEmpresas(),
+        api.listDocumentos(),
+        api.listClasseServicos(),
+        api.listPrestadores(),
+        api.listTarefas() // Puxa todas as condicionantes
+      ]);
+
+      setEmpresas(empList);
+      setDocumentos(docList);
+      setClasseServicos(csList);
+      setPrestadores(prList);
+      setTodasTarefas(tarefas);
+
+    } catch (error) {
+      console.error("Erro ao carregar dados do cronograma completo:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCronogramaData();
+  }, [user]);
+
+  // Centraliza o scroll no mês atual ao entrar na linha do tempo
+  useEffect(() => {
+    if (!loading && activeTab === 'timeline' && containerRef.current) {
+      setTimeout(() => {
+        containerRef.current.scrollLeft = 150;
+        const currentMonthEl = document.getElementById('current-month-row');
+        if (currentMonthEl) {
+          containerRef.current.scrollTop = currentMonthEl.offsetTop - 45;
+        }
+      }, 300);
+    }
+  }, [loading, activeTab]);
+
+  // Ação de Concluir Tarefa com um clique
+  const handleConcludeTask = async (taskId) => {
+    try {
+      await api.updateTarefa(taskId, { status: 'Concluído' });
+      // Atualiza estado local
+      setTodasTarefas(prev => prev.map(t => 
+        t._id === taskId 
+          ? { ...t, status: 'Concluído', data_conclusao: new Date().toISOString() } 
+          : t
+      ));
+    } catch (error) {
+      console.error("Erro ao concluir condicionante:", error);
+      alert("Não foi possível concluir a tarefa.");
+    }
+  };
+
+  // Funções Auxiliares de Nomes e Mapeamentos
+  const getEmpresaNome = (id) => {
+    const found = empresas.find(e => e._id === id);
+    return found ? found.nome_fantasia : 'Empresa';
+  };
+
+  const getDocumentoInfo = (id) => {
+    if (!id) return 'Sem documento atrelado';
+    const found = documentos.find(d => d._id === id);
+    return found ? `${found.tipo} (${found.numero || 'Sem número'})` : 'Documento';
+  };
+
+  const getClasseServicoNome = (id) => {
+    if (!id) return 'Sem classe';
+    const found = classeServicos.find(cs => cs._id === id);
+    return found ? found.nome : 'Classe de Serviço';
+  };
+
+  const getPrestadorNome = (classeServicoId) => {
+    if (!classeServicoId) return null;
+    const cs = classeServicos.find(c => c._id === classeServicoId);
+    if (!cs || !cs.prestador_id) return null;
+    const pr = prestadores.find(p => p._id === cs.prestador_id);
+    return pr ? pr.nome : null;
+  };
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '';
+    return new Date(dateStr).toLocaleDateString('pt-BR');
+  };
+
+  const isTaskOverdue = (t) => {
+    if (t.status === 'Concluído') return false;
+    return new Date(t.data_vencimento) < new Date();
+  };
+
+  const getTaskStatusColor = (t) => {
+    if (t.status === 'Concluído') return 'var(--success)';
+    if (isTaskOverdue(t)) return 'var(--danger)';
+    if (t.status === 'Em Andamento' || t.status === 'Aguardando Auditoria') return '#eab308'; // Amarelo
+    return 'var(--primary)';
+  };
+
+  const getTaskStatusBadgeStyle = (t) => {
+    if (t.status === 'Concluído') return { background: 'var(--success-light)', color: 'var(--success)' };
+    if (isTaskOverdue(t)) return { background: 'var(--danger-light)', color: 'var(--danger)' };
+    if (t.status === 'Em Andamento' || t.status === 'Aguardando Auditoria') return { background: '#fef9c3', color: '#854d0e' };
+    return { background: 'var(--primary-light)', color: 'var(--primary)' };
+  };
+
+  // --- Handlers de Drag and Scroll ---
+  const handleMouseDown = (e) => {
+    if (e.target.closest('button') || e.target.closest('.interactive-card')) return;
+    isDownRef.current = true;
+    setIsDragging(true);
+    startXRef.current = e.pageX - containerRef.current.offsetLeft;
+    startYRef.current = e.pageY - containerRef.current.offsetTop;
+    scrollLeftRef.current = containerRef.current.scrollLeft;
+    scrollTopRef.current = containerRef.current.scrollTop;
+    lastXRef.current = e.pageX;
+    lastTimeRef.current = Date.now();
+    velocityXRef.current = 0;
+    if (animationFrameIdRef.current) cancelAnimationFrame(animationFrameIdRef.current);
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDownRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - containerRef.current.offsetLeft;
+    const y = e.pageY - containerRef.current.offsetTop;
+    const walkX = (x - startXRef.current) * 1.5;
+    const walkY = (y - startYRef.current) * 1.5;
+    containerRef.current.scrollLeft = scrollLeftRef.current - walkX;
+    containerRef.current.scrollTop = scrollTopRef.current - walkY;
+    
+    const now = Date.now();
+    const timeElapsed = now - lastTimeRef.current;
+    if (timeElapsed > 0) {
+      velocityXRef.current = (e.pageX - lastXRef.current) / timeElapsed;
+    }
+    lastXRef.current = e.pageX;
+    lastTimeRef.current = now;
+  };
+
+  const handleMouseUpOrLeave = () => {
+    if (!isDownRef.current) return;
+    isDownRef.current = false;
+    setIsDragging(false);
+    let velocityX = velocityXRef.current * 16;
+    const decay = 0.95;
+    const step = () => {
+      if (Math.abs(velocityX) < 0.15) return;
+      if (containerRef.current) {
+        containerRef.current.scrollLeft -= velocityX;
+        velocityX *= decay;
+        animationFrameIdRef.current = requestAnimationFrame(step);
+      }
+    };
+    animationFrameIdRef.current = requestAnimationFrame(step);
+  };
+
+  const handleScrollLeft = () => {
+    if (containerRef.current) containerRef.current.scrollBy({ left: -300, behavior: 'smooth' });
+  };
+
+  const handleScrollRight = () => {
+    if (containerRef.current) containerRef.current.scrollBy({ left: 300, behavior: 'smooth' });
+  };
+
+  const handleResetCenter = () => {
+    if (containerRef.current) {
+      const currentMonthEl = document.getElementById('current-month-row');
+      const targetTop = currentMonthEl ? currentMonthEl.offsetTop - 45 : 0;
+      containerRef.current.scrollTo({
+        left: 150,
+        top: targetTop,
+        behavior: 'smooth'
+      });
+    }
+  };
+
+  // --- FILTRO DE CLASSE DE SERVIÇO GLOBAL ---
+  const getFilteredTasks = () => {
+    return todasTarefas.filter(t => {
+      if (selectedClasseServicoId && t.classe_servico_id !== selectedClasseServicoId) {
+        return false;
+      }
+      return true;
+    });
+  };
+
+  // ==========================================
+  // VIEW 1: LINHA DO TEMPO STACKED (TIMELINE)
+  // ==========================================
+  const renderTimelineView = () => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    const months = [];
+    const startDate = new Date(currentYear, currentMonth - 3, 1);
+    for (let i = 0; i < 15; i++) {
+      const d = new Date(startDate.getFullYear(), startDate.getMonth() + i, 1);
+      months.push({
+        label: d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
+        month: d.getMonth(),
+        year: d.getFullYear(),
+        key: `${d.getFullYear()}-${d.getMonth()}`
+      });
+    }
+
+    const tasksToRender = getFilteredTasks();
+
+    return (
+      <div style={styles.timelineWrapper}>
+        <div style={styles.timelineControlBar}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <div style={styles.toggleContainer}>
+              <button 
+                style={showOnlyServiceClass ? styles.activeToggleBtn : styles.toggleBtn}
+                onClick={() => setShowOnlyServiceClass(!showOnlyServiceClass)}
+              >
+                <Activity size={16} />
+                <span>{showOnlyServiceClass ? "Ver Nomes" : "Ver Classes de Serviço"}</span>
+              </button>
+            </div>
+
+            {selectedClasseServicoId && (
+              <button 
+                style={styles.clearFilterHeaderBtn} 
+                onClick={() => setSelectedClasseServicoId(null)}
+              >
+                <X size={14} />
+                <span>Limpar Filtro ({getClasseServicoNome(selectedClasseServicoId)})</span>
+              </button>
+            )}
+          </div>
+
+          <div style={styles.horizontalNavBtns}>
+            <button style={styles.todayBtn} onClick={handleResetCenter}>Hoje</button>
+            <button style={styles.navCircleBtn} onClick={handleScrollLeft}><ChevronLeft size={18} /></button>
+            <button style={styles.navCircleBtn} onClick={handleScrollRight}><ChevronRight size={18} /></button>
+          </div>
+        </div>
+
+        <div 
+          ref={containerRef}
+          style={{ ...styles.timelineContainer, cursor: isDragging ? 'grabbing' : 'grab' }}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUpOrLeave}
+          onMouseLeave={handleMouseUpOrLeave}
+        >
+          <div style={styles.timelineGrid}>
+            <div style={styles.rulerRow}>
+              <div style={styles.rulerMonthPlaceholder}></div>
+              <div style={styles.rulerDaysTrack}>
+                {[1, 5, 10, 15, 20, 25, 30].map(day => (
+                  <div key={day} style={{ ...styles.rulerDayMark, left: `${10 + ((day - 1) / 30) * 80}%` }}>
+                    <span>Dia {day}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {months.map((m) => {
+              let mTasks = tasksToRender.filter(t => {
+                if (!t.data_vencimento) return false;
+                const d = new Date(t.data_vencimento);
+                return d.getMonth() === m.month && d.getFullYear() === m.year;
+              });
+
+              const isCurrentMonth = m.month === currentMonth && m.year === currentYear;
+              const hasHoveredTask = mTasks.some(t => t._id === hoveredTaskId);
+
+              return (
+                <div 
+                  key={m.key} 
+                  id={isCurrentMonth ? 'current-month-row' : undefined}
+                  style={{
+                    ...styles.monthRow,
+                    height: '230px',
+                    background: isCurrentMonth ? 'rgba(37, 99, 235, 0.02)' : 'transparent',
+                    zIndex: hasHoveredTask ? 30 : 1
+                  }}
+                >
+                  <div style={{
+                    ...styles.monthStickyHeader,
+                    borderLeftColor: isCurrentMonth ? 'var(--primary)' : 'var(--glass-border)'
+                  }}>
+                    <span style={{
+                      ...styles.monthLabelText,
+                      fontWeight: isCurrentMonth ? '700' : '500',
+                      color: isCurrentMonth ? 'var(--primary)' : 'var(--text-main)'
+                    }}>
+                      {m.label}
+                    </span>
+                    <span style={styles.monthTaskCount}>
+                      {mTasks.length} {mTasks.length === 1 ? 'tarefa' : 'tarefas'}
+                    </span>
+                  </div>
+
+                  <div style={styles.monthTimelineTrack}>
+                    <div style={styles.horizontalLine}></div>
+
+                    {Array.from({ length: 30 }).map((_, dIdx) => {
+                      const dayNum = dIdx + 1;
+                      const tickPercent = 10 + (dIdx / 29) * 80;
+                      const isMajor = dayNum === 1 || dayNum % 5 === 0;
+                      return (
+                        <div 
+                          key={dIdx} 
+                          style={{
+                            ...styles.dayTick,
+                            left: `${tickPercent}%`,
+                            height: isMajor ? '12px' : '6px',
+                            opacity: isMajor ? 0.6 : 0.25,
+                            background: isMajor ? 'var(--text-main)' : 'var(--text-light)'
+                          }}
+                        ></div>
+                      );
+                    })}
+
+                    {mTasks.map((t, tIdx) => {
+                      const tDate = new Date(t.data_vencimento);
+                      const day = tDate.getDate();
+                      const leftPercent = 10 + ((day - 1) / 30) * 80;
+                      const isEven = tIdx % 2 === 0;
+                      const isHovered = hoveredTaskId === t._id;
+
+                      const empresaNome = getEmpresaNome(t.empresa_id);
+                      const csNome = getClasseServicoNome(t.classe_servico_id);
+                      const color = getTaskStatusColor(t);
+
+                      const displayTitle = showOnlyServiceClass ? csNome : t.titulo;
+
+                      return (
+                        <div 
+                          key={t._id} 
+                          style={{
+                            ...styles.nodeWrapper,
+                            left: `${leftPercent}%`,
+                            zIndex: isHovered ? 100 : 5
+                          }}
+                        >
+                          <div 
+                            style={{
+                              ...styles.nodeDot,
+                              background: color,
+                              boxShadow: isHovered ? `0 0 14px 4px ${color}` : `0 0 8px ${color}`,
+                              transform: isHovered ? 'scale(1.4)' : 'scale(1)'
+                            }}
+                            onClick={() => onViewTask && onViewTask(t._id)}
+                            onMouseEnter={() => setHoveredTaskId(t._id)}
+                            onMouseLeave={() => setHoveredTaskId(null)}
+                          ></div>
+
+                          <>
+                            <div style={{
+                              ...styles.verticalConnector,
+                              ...(isEven ? styles.connectorEven : styles.connectorOdd),
+                              borderColor: color,
+                              borderLeftWidth: isHovered ? '3px' : '1px',
+                              borderStyle: isHovered ? 'solid' : 'dashed',
+                              opacity: isHovered ? 1 : 0.4
+                            }}></div>
+                            
+                            <div 
+                              className="interactive-card"
+                              style={{
+                                ...styles.timelineCompactCard,
+                                ...(isEven ? styles.cardEven : styles.cardOdd),
+                                ...(isHovered && {
+                                  bottom: 'auto',
+                                  top: isEven ? '12px' : '55px',
+                                  transform: 'translateX(-50%) scale(1.08)',
+                                  background: '#ffffff',
+                                  zIndex: 100,
+                                  boxShadow: '0 12px 36px rgba(0, 0, 0, 0.18)'
+                                }),
+                                borderLeftColor: color
+                              }}
+                              onClick={() => onViewTask && onViewTask(t._id)}
+                              onMouseEnter={() => setHoveredTaskId(t._id)}
+                              onMouseLeave={() => setHoveredTaskId(null)}
+                            >
+                              <div style={styles.cardHeaderMini}>
+                                <span style={{
+                                  ...styles.tagMini,
+                                  ...getTaskStatusBadgeStyle(t)
+                                }}>
+                                  Dia {day}
+                                </span>
+                                <span style={styles.cardCompanyMini} title={empresaNome}>
+                                  {empresaNome}
+                                </span>
+                              </div>
+
+                              <h6 style={styles.cardTitleMini} title={isHovered ? t.titulo : displayTitle}>
+                                {isHovered ? t.titulo : displayTitle}
+                              </h6>
+                              
+                              <div style={styles.cardFooterMini}>
+                                <span style={styles.cardValMini}>R$ {t.valor_estimado || 0}</span>
+                                
+                                <div style={{ display: 'flex', gap: '4px' }}>
+                                  {t.status !== 'Concluído' && (
+                                    <button 
+                                      style={{ ...styles.actionMicroBtn, color: 'var(--success)' }} 
+                                      onClick={(e) => { e.stopPropagation(); handleConcludeTask(t._id); }}
+                                      title="Concluir condicionante"
+                                    >
+                                      <CheckCircle2 size={12} />
+                                    </button>
+                                  )}
+                                  {t.classe_servico_id && (
+                                    <button
+                                      style={{
+                                        ...styles.isolateBtn,
+                                        background: selectedClasseServicoId === t.classe_servico_id ? 'var(--primary)' : 'rgba(0, 0, 0, 0.04)',
+                                        color: selectedClasseServicoId === t.classe_servico_id ? 'white' : 'var(--text-muted)'
+                                      }}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedClasseServicoId(selectedClasseServicoId === t.classe_servico_id ? null : t.classe_servico_id);
+                                      }}
+                                      title="Isolar esta classe de serviço"
+                                    >
+                                      <Filter size={10} />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+
+                              {isHovered && (
+                                <div style={styles.expandedDetails} className="animate-fade-in">
+                                  <div style={styles.detailDivider}></div>
+                                  <div style={styles.expandedField}>
+                                    <strong>Documento:</strong> {getDocumentoInfo(t.documento_id)}
+                                  </div>
+                                  <div style={styles.expandedField}>
+                                    <strong>Classe:</strong> {csNome}
+                                  </div>
+                                  {getPrestadorNome(t.classe_servico_id) && (
+                                    <div style={styles.expandedField}>
+                                      <strong>Prestador:</strong> {getPrestadorNome(t.classe_servico_id)}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // ==========================================
+  // VIEW 2: QUADRO KANBAN
+  // ==========================================
+  const renderKanbanView = () => {
+    const tasks = getFilteredTasks();
+    
+    // Categorização dos cards
+    const columns = {
+      aVencer: {
+        title: 'A Vencer',
+        color: 'var(--primary)',
+        tasks: tasks.filter(t => t.status === 'Pendente' && !isTaskOverdue(t))
+      },
+      emAndamento: {
+        title: 'Em Andamento',
+        color: '#eab308',
+        tasks: tasks.filter(t => t.status === 'Em Andamento' || t.status === 'Aguardando Auditoria')
+      },
+      atrasadas: {
+        title: 'Atrasadas',
+        color: 'var(--danger)',
+        tasks: tasks.filter(isTaskOverdue)
+      },
+      concluidas: {
+        title: 'Concluídas',
+        color: 'var(--success)',
+        tasks: tasks.filter(t => t.status === 'Concluído')
+      }
+    };
+
+    return (
+      <div style={styles.kanbanContainer} className="animate-fade-in">
+        {Object.entries(columns).map(([key, col]) => (
+          <div key={key} className="glass-panel" style={styles.kanbanColumn}>
+            <div style={{ ...styles.kanbanColumnHeader, borderBottom: `3px solid ${col.color}` }}>
+              <h4 style={styles.kanbanColumnTitle}>{col.title}</h4>
+              <span style={styles.kanbanCountPill}>{col.tasks.length}</span>
+            </div>
+            
+            <div style={styles.kanbanCardsList}>
+              {col.tasks.length === 0 ? (
+                <div style={styles.kanbanEmptyState}>Nenhuma condicionante</div>
+              ) : (
+                col.tasks.map(t => (
+                  <div 
+                    key={t._id} 
+                    className="glass-card card-hover" 
+                    style={styles.kanbanCard}
+                    onClick={() => onViewTask(t._id)}
+                  >
+                    <div style={styles.kanbanCardHeader}>
+                      <span style={styles.kanbanCardCompany}>{getEmpresaNome(t.empresa_id)}</span>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: col.color }}>
+                        Dia {new Date(t.data_vencimento).getDate()}
+                      </span>
+                    </div>
+                    <h5 style={styles.kanbanCardTitle}>{t.titulo}</h5>
+                    <span style={styles.kanbanCardClass}>{getClasseServicoNome(t.classe_servico_id)}</span>
+                    
+                    <div style={styles.kanbanCardFooter}>
+                      <span style={styles.kanbanCardPrice}>R$ {t.valor_estimado || 0}</span>
+                      
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        {t.status !== 'Concluído' && (
+                          <button 
+                            style={styles.kanbanConcludeBtn}
+                            onClick={(e) => { e.stopPropagation(); handleConcludeTask(t._id); }}
+                            title="Marcar como Concluído"
+                          >
+                            <CheckCircle2 size={14} />
+                          </button>
+                        )}
+                        {t.classe_servico_id && (
+                          <button
+                            style={{
+                              ...styles.isolateBtn,
+                              background: selectedClasseServicoId === t.classe_servico_id ? 'var(--primary)' : 'rgba(0,0,0,0.04)',
+                              color: selectedClasseServicoId === t.classe_servico_id ? 'white' : 'var(--text-muted)'
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedClasseServicoId(selectedClasseServicoId === t.classe_servico_id ? null : t.classe_servico_id);
+                            }}
+                            title="Isolar esta classe"
+                          >
+                            <Filter size={10} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+
+
+  // ==========================================
+  // VIEW 5: LISTA ANALÍTICA (CHECKLIST GRID)
+  // ==========================================
+  const renderListaView = () => {
+    // Filtra tarefas com base em termos de busca, empresa e status
+    const tasks = getFilteredTasks().filter(t => {
+      const matchesSearch = t.titulo.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        getClasseServicoNome(t.classe_servico_id).toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesCompany = listCompanyFilter ? t.empresa_id === listCompanyFilter : true;
+      const matchesStatus = listStatusFilter ? t.status === listStatusFilter : true;
+
+      return matchesSearch && matchesCompany && matchesStatus;
+    });
+
+    return (
+      <div className="glass-panel animate-fade-in" style={styles.listContainer}>
+        {/* Barra de Filtros e Busca */}
+        <div style={styles.listFilterBar}>
+          <div style={styles.searchWrapper}>
+            <Search size={18} color="var(--text-light)" />
+            <input 
+              type="text" 
+              placeholder="Buscar por título ou classe de serviço..."
+              style={styles.searchInput}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', flex: 1, justifyContent: 'flex-end' }}>
+            <select 
+              style={styles.listSelect}
+              value={listCompanyFilter}
+              onChange={(e) => setListCompanyFilter(e.target.value)}
+            >
+              <option value="">Todas Empresas</option>
+              {empresas.map(e => (
+                <option key={e._id} value={e._id}>{e.nome_fantasia}</option>
+              ))}
+            </select>
+
+            <select 
+              style={styles.listSelect}
+              value={listStatusFilter}
+              onChange={(e) => setListStatusFilter(e.target.value)}
+            >
+              <option value="">Todos Status</option>
+              <option value="Pendente">Pendentes</option>
+              <option value="Em Andamento">Em Andamento</option>
+              <option value="Concluído">Concluídos</option>
+              <option value="Atrasado">Atrasados</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Tabela de Dados */}
+        <div style={{ overflowX: 'auto' }}>
+          <table style={styles.table}>
+            <thead>
+              <tr style={styles.tableHeaderRow}>
+                <th style={styles.th}>Status</th>
+                <th style={styles.th}>Obrigação / Condicionante</th>
+                <th style={styles.th}>Empresa</th>
+                <th style={styles.th}>Classe de Serviço</th>
+                <th style={styles.th}>Vencimento</th>
+                <th style={{ ...styles.th, textAlign: 'right' }}>Valor</th>
+                <th style={{ ...styles.th, textAlign: 'center' }}>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tasks.length === 0 ? (
+                <tr>
+                  <td colSpan="7" style={styles.tdEmpty}>Nenhuma obrigação encontrada com os filtros selecionados.</td>
+                </tr>
+              ) : (
+                tasks.map(t => (
+                  <tr key={t._id} style={styles.tableRow} onClick={() => onViewTask(t._id)}>
+                    <td style={styles.td}>
+                      <span style={{
+                        ...styles.statusBadge,
+                        ...getTaskStatusBadgeStyle(t)
+                      }}>
+                        {t.status === 'Concluído' ? 'Concluída' : isTaskOverdue(t) ? 'Atrasada' : t.status}
+                      </span>
+                    </td>
+                    <td style={{ ...styles.td, fontWeight: '600' }}>{t.titulo}</td>
+                    <td style={styles.td}>{getEmpresaNome(t.empresa_id)}</td>
+                    <td style={styles.td}>{getClasseServicoNome(t.classe_servico_id)}</td>
+                    <td style={styles.td}>{formatDate(t.data_vencimento)}</td>
+                    <td style={{ ...styles.td, textAlign: 'right', fontWeight: 'bold' }}>R$ {t.valor_estimado || 0}</td>
+                    <td style={{ ...styles.td, textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                        {t.status !== 'Concluído' && (
+                          <button 
+                            style={styles.actionCircleBtn}
+                            onClick={() => handleConcludeTask(t._id)}
+                            title="Marcar como concluída"
+                          >
+                            <CheckCircle2 size={15} color="var(--success)" />
+                          </button>
+                        )}
+                        <button 
+                          style={styles.actionCircleBtn}
+                          onClick={() => onViewTask(t._id)}
+                          title="Ver detalhes"
+                        >
+                          <TrendingUp size={15} color="var(--primary)" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
+  // --- Render Geral da Tela ---
+  if (loading) {
+    return (
+      <div style={styles.loaderContainer}>
+        <div className="animate-spin" style={styles.spinner}></div>
+        <p style={{ marginTop: '1rem', color: 'var(--text-muted)' }}>Carregando cronograma...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="animate-fade-in" style={styles.container}>
+      {/* Header */}
+      <header style={styles.header}>
+        <div>
+          <h1 style={styles.title}>Cronograma Operacional</h1>
+          <p style={styles.subtitle}>Visões integradas de compliance, obrigações e prazos.</p>
+        </div>
+        <div style={styles.topRightControls}>
+          <div style={styles.iconButton} title="Notificações">
+            <Bell size={22} color="var(--text-main)" />
+            {todasTarefas.filter(isTaskOverdue).length > 0 && (
+              <span style={styles.notificationBadge}></span>
+            )}
+          </div>
+          <div 
+            style={styles.iconButton} 
+            title="Ver Calendário"
+            onClick={() => onNavigateTab && onNavigateTab('calendario')}
+          >
+            <CalendarDays size={22} color="var(--text-main)" />
+          </div>
+        </div>
+      </header>
+
+      {/* Tabs Principais de Visualizações */}
+      <div style={styles.tabsContainer}>
+        <button 
+          style={activeTab === 'timeline' ? styles.activeTab : styles.tab} 
+          onClick={() => setActiveTab('timeline')}
+        >
+          <Activity size={18} /> Linha do Tempo Stacked
+        </button>
+        <button 
+          style={activeTab === 'kanban' ? styles.activeTab : styles.tab} 
+          onClick={() => setActiveTab('kanban')}
+        >
+          <LayoutList size={18} /> Quadro Kanban
+        </button>
+        <button 
+          style={activeTab === 'lista' ? styles.activeTab : styles.tab} 
+          onClick={() => setActiveTab('lista')}
+        >
+          <SlidersHorizontal size={18} /> Lista Analítica
+        </button>
+      </div>
+
+      {/* Conteúdo Dinâmico conforme Tab Ativa */}
+      <div style={styles.tabContent}>
+        {activeTab === 'timeline' && renderTimelineView()}
+        {activeTab === 'kanban' && renderKanbanView()}
+        {activeTab === 'lista' && renderListaView()}
+      </div>
+    </div>
+  );
+}
+
+const styles = {
+  container: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1.5rem',
+  },
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: '1rem',
+    textAlign: 'left',
+  },
+  title: {
+    fontSize: '2rem',
+    fontWeight: '700',
+    color: 'var(--text-main)',
+  },
+  subtitle: {
+    fontSize: '0.95rem',
+    color: 'var(--text-muted)',
+    marginTop: '0.25rem',
+  },
+  topRightControls: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '1rem',
+  },
+  iconButton: {
+    width: '42px',
+    height: '42px',
+    borderRadius: '50%',
+    background: 'var(--glass-bg)',
+    border: '1px solid var(--glass-border)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    position: 'relative',
+    transition: 'all 0.2s',
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: '10px',
+    right: '10px',
+    width: '8px',
+    height: '8px',
+    borderRadius: '50%',
+    background: 'var(--danger)',
+    border: '2px solid var(--bg-main)',
+  },
+  tabsContainer: {
+    display: 'flex',
+    gap: '0.5rem',
+    background: 'rgba(255, 255, 255, 0.1)',
+    padding: '0.5rem',
+    borderRadius: '16px',
+    border: '1px solid var(--glass-border)',
+    overflowX: 'auto',
+  },
+  tab: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    padding: '0.75rem 1.25rem',
+    borderRadius: '12px',
+    border: 'none',
+    background: 'transparent',
+    color: 'var(--text-muted)',
+    fontWeight: '600',
+    fontSize: '0.9rem',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    whiteSpace: 'nowrap',
+  },
+  activeTab: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    padding: '0.75rem 1.25rem',
+    borderRadius: '12px',
+    border: 'none',
+    background: 'var(--primary)',
+    color: 'white',
+    fontWeight: '600',
+    fontSize: '0.9rem',
+    cursor: 'pointer',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+    whiteSpace: 'nowrap',
+  },
+  tabContent: {
+    marginTop: '0.5rem',
+  },
+
+  // STYLES: Timeline Stacked
+  timelineWrapper: {
+    background: 'var(--glass-bg)',
+    border: '1px solid var(--glass-border)',
+    borderRadius: '24px',
+    padding: '1.5rem',
+    boxShadow: '0 10px 40px rgba(0,0,0,0.03)',
+  },
+  timelineControlBar: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '1.5rem',
+    flexWrap: 'wrap',
+    gap: '1rem',
+  },
+  toggleContainer: {
+    display: 'flex',
+    gap: '6px',
+    background: 'rgba(0,0,0,0.03)',
+    padding: '4px',
+    borderRadius: '12px',
+    border: '1px solid var(--glass-border)',
+  },
+  toggleBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '0.5rem 1.25rem',
+    borderRadius: '8px',
+    border: 'none',
+    background: 'transparent',
+    color: 'var(--text-muted)',
+    fontSize: '0.825rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+  },
+  activeToggleBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '0.5rem 1.25rem',
+    borderRadius: '8px',
+    border: 'none',
+    background: 'var(--bg-main, #ffffff)',
+    color: 'var(--primary)',
+    fontSize: '0.825rem',
+    fontWeight: '700',
+    cursor: 'pointer',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+  },
+  clearFilterHeaderBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '0.5rem 1rem',
+    borderRadius: '12px',
+    border: '1px solid rgba(239, 68, 68, 0.2)',
+    background: 'rgba(239, 68, 68, 0.08)',
+    color: 'var(--danger)',
+    fontSize: '0.825rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    boxShadow: '0 2px 8px rgba(239, 68, 68, 0.05)',
+  },
+  horizontalNavBtns: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+  },
+  todayBtn: {
+    padding: '0.5rem 1rem',
+    borderRadius: '12px',
+    border: '1px solid var(--glass-border)',
+    background: 'var(--bg-main, #ffffff)',
+    color: 'var(--primary)',
+    fontSize: '0.825rem',
+    fontWeight: '700',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+  },
+  navCircleBtn: {
+    width: '36px',
+    height: '36px',
+    borderRadius: '50%',
+    border: '1px solid var(--glass-border)',
+    background: 'var(--bg-main, #ffffff)',
+    color: 'var(--text-main)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+  },
+  timelineContainer: {
+    width: '100%',
+    maxHeight: '600px',
+    overflow: 'auto',
+    borderRadius: '16px',
+    border: '1px solid var(--glass-border)',
+    background: 'rgba(255, 255, 255, 0.2)',
+    userSelect: 'none',
+  },
+  timelineGrid: {
+    display: 'flex',
+    flexDirection: 'column',
+    width: '1400px',
+    position: 'relative',
+  },
+  rulerRow: {
+    display: 'flex',
+    alignItems: 'center',
+    height: '45px',
+    borderBottom: '1px solid var(--glass-border)',
+    background: 'var(--bg-main, #ffffff)',
+    position: 'sticky',
+    top: 0,
+    zIndex: 20,
+  },
+  rulerMonthPlaceholder: {
+    width: '160px',
+    flexShrink: 0,
+    borderRight: '1px solid var(--glass-border)',
+    background: 'var(--bg-main, #ffffff)',
+    position: 'sticky',
+    left: 0,
+    zIndex: 21,
+  },
+  rulerDaysTrack: {
+    flex: 1,
+    height: '100%',
+    position: 'relative',
+  },
+  rulerDayMark: {
+    position: 'absolute',
+    top: '50%',
+    transform: 'translate(-50%, -50%)',
+    fontSize: '0.75rem',
+    fontWeight: '700',
+    color: 'var(--text-light)',
+  },
+  monthRow: {
+    display: 'flex',
+    alignItems: 'center',
+    borderBottom: '1px solid rgba(0,0,0,0.03)',
+    position: 'relative',
+  },
+  monthStickyHeader: {
+    width: '160px',
+    height: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    padding: '0 1rem',
+    borderRight: '1px solid var(--glass-border)',
+    borderLeft: '4px solid transparent',
+    background: 'var(--bg-main, #ffffff)',
+    position: 'sticky',
+    left: 0,
+    zIndex: 10,
+    flexShrink: 0,
+  },
+  monthLabelText: {
+    fontSize: '0.85rem',
+    textTransform: 'capitalize',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  monthTaskCount: {
+    fontSize: '0.7rem',
+    color: 'var(--text-light)',
+    marginTop: '2px',
+  },
+  monthTimelineTrack: {
+    flex: 1,
+    height: '100%',
+    position: 'relative',
+  },
+  horizontalLine: {
+    position: 'absolute',
+    top: '50%',
+    left: 0,
+    right: 0,
+    height: '2px',
+    background: 'var(--glass-border)',
+    transform: 'translateY(-50%)',
+    zIndex: 1,
+  },
+  dayTick: {
+    position: 'absolute',
+    top: '50%',
+    transform: 'translate(-50%, -50%)',
+    width: '1px',
+    zIndex: 2,
+  },
+  nodeWrapper: {
+    position: 'absolute',
+    top: '50%',
+    transform: 'translate(-50%, -50%)',
+    width: '20px',
+    height: '20px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nodeDot: {
+    width: '12px',
+    height: '12px',
+    borderRadius: '50%',
+    border: '2px solid var(--bg-main, #ffffff)',
+    zIndex: 5,
+    cursor: 'pointer',
+    transition: 'all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+  },
+  verticalConnector: {
+    position: 'absolute',
+    left: '50%',
+    width: '1px',
+    transform: 'translateX(-50%)',
+    zIndex: 2,
+    transition: 'all 0.2s ease',
+  },
+  connectorEven: {
+    bottom: '10px',
+    height: '42px',
+  },
+  connectorOdd: {
+    top: '10px',
+    height: '42px',
+  },
+  timelineCompactCard: {
+    position: 'absolute',
+    left: '50%',
+    width: '190px',
+    background: 'rgba(255, 255, 255, 0.85)',
+    border: '1px solid var(--glass-border)',
+    borderLeftWidth: '4px',
+    borderRadius: '12px',
+    padding: '0.6rem 0.75rem',
+    cursor: 'pointer',
+    boxShadow: '0 4px 16px rgba(0,0,0,0.03)',
+    zIndex: 10,
+    transition: 'all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+  },
+  cardEven: {
+    bottom: '52px',
+  },
+  cardOdd: {
+    top: '52px',
+  },
+  cardHeaderMini: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '4px',
+    gap: '4px',
+  },
+  tagMini: {
+    fontSize: '0.58rem',
+    fontWeight: '700',
+    padding: '0.08rem 0.3rem',
+    borderRadius: '4px',
+    whiteSpace: 'nowrap',
+  },
+  cardCompanyMini: {
+    fontSize: '0.62rem',
+    fontWeight: '600',
+    color: 'var(--text-light)',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    maxWidth: '100px',
+  },
+  cardTitleMini: {
+    fontSize: '0.74rem',
+    fontWeight: '600',
+    color: 'var(--text-main)',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    textAlign: 'left',
+    margin: '3px 0 5px 0',
+  },
+  cardFooterMini: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+  },
+  cardValMini: {
+    fontSize: '0.65rem',
+    fontWeight: '700',
+    color: 'var(--text-light)',
+  },
+  actionMicroBtn: {
+    border: 'none',
+    background: 'rgba(0, 0, 0, 0.03)',
+    width: '20px',
+    height: '20px',
+    borderRadius: '4px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+  },
+  isolateBtn: {
+    border: 'none',
+    width: '20px',
+    height: '20px',
+    borderRadius: '4px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+  },
+  expandedDetails: {
+    marginTop: '6px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+    textAlign: 'left',
+  },
+  detailDivider: {
+    height: '1px',
+    background: 'var(--glass-border)',
+    margin: '4px 0',
+  },
+  expandedField: {
+    fontSize: '0.64rem',
+    color: 'var(--text-muted)',
+    lineHeight: '1.3',
+  },
+
+  // STYLES: Kanban Board
+  kanbanContainer: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+    gap: '1rem',
+    marginTop: '0.5rem',
+  },
+  kanbanColumn: {
+    padding: '1rem',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1rem',
+    background: 'rgba(255, 255, 255, 0.2)',
+    maxHeight: '75vh',
+    overflowY: 'auto',
+  },
+  kanbanColumnHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: '0.5rem',
+  },
+  kanbanColumnTitle: {
+    fontSize: '0.95rem',
+    fontWeight: '700',
+    color: 'var(--text-main)',
+  },
+  kanbanCountPill: {
+    fontSize: '0.75rem',
+    fontWeight: '700',
+    padding: '0.15rem 0.5rem',
+    background: 'var(--glass-border)',
+    borderRadius: '8px',
+  },
+  kanbanCardsList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.75rem',
+  },
+  kanbanEmptyState: {
+    fontSize: '0.8rem',
+    color: 'var(--text-light)',
+    fontStyle: 'italic',
+    padding: '1.5rem 0',
+  },
+  kanbanCard: {
+    padding: '1rem',
+    cursor: 'pointer',
+    textAlign: 'left',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.4rem',
+  },
+  kanbanCardHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  kanbanCardCompany: {
+    fontSize: '0.68rem',
+    fontWeight: '700',
+    color: 'var(--text-light)',
+    textTransform: 'uppercase',
+  },
+  kanbanCardTitle: {
+    fontSize: '0.85rem',
+    fontWeight: '600',
+    color: 'var(--text-main)',
+    margin: '2px 0',
+  },
+  kanbanCardClass: {
+    fontSize: '0.7rem',
+    color: 'var(--text-muted)',
+  },
+  kanbanCardFooter: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: '0.25rem',
+  },
+  kanbanCardPrice: {
+    fontSize: '0.75rem',
+    fontWeight: '800',
+    color: 'var(--text-light)',
+  },
+  kanbanConcludeBtn: {
+    border: 'none',
+    background: 'var(--success-light)',
+    color: 'var(--success)',
+    width: '24px',
+    height: '24px',
+    borderRadius: '6px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+  },
+
+  // STYLES: Gantt Chart
+  ganttContainer: {
+    padding: '1.5rem',
+    textAlign: 'left',
+  },
+  ganttHeaderRow: {
+    display: 'flex',
+    borderBottom: '2px solid var(--glass-border)',
+    paddingBottom: '0.75rem',
+    fontWeight: '700',
+    fontSize: '0.85rem',
+  },
+  ganttCompanyLabelHeader: {
+    width: '180px',
+    flexShrink: 0,
+    color: 'var(--text-main)',
+  },
+  ganttTimeGridHeader: {
+    flex: 1,
+    display: 'flex',
+  },
+  ganttMonthColHeader: {
+    flex: 1,
+    textAlign: 'center',
+    textTransform: 'capitalize',
+    color: 'var(--text-light)',
+  },
+  ganttBody: {
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  ganttRow: {
+    display: 'flex',
+    alignItems: 'center',
+    borderBottom: '1px solid rgba(0,0,0,0.03)',
+    minHeight: '65px',
+  },
+  ganttCompanyCell: {
+    width: '180px',
+    flexShrink: 0,
+    paddingRight: '1rem',
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  ganttSubCount: {
+    fontSize: '0.65rem',
+    color: 'var(--text-light)',
+    marginTop: '2px',
+  },
+  ganttTimeTrackCell: {
+    flex: 1,
+    height: '100%',
+    position: 'relative',
+    minHeight: '65px',
+    display: 'flex',
+    alignItems: 'center',
+  },
+  ganttBgGridLines: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    display: 'flex',
+    zIndex: 1,
+  },
+  ganttGridLine: {
+    flex: 1,
+    borderRight: '1px solid rgba(0,0,0,0.02)',
+    height: '100%',
+  },
+  ganttBar: {
+    position: 'absolute',
+    height: '24px',
+    borderRadius: '6px',
+    display: 'flex',
+    alignItems: 'center',
+    padding: '0 0.5rem',
+    cursor: 'pointer',
+    zIndex: 5,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    transition: 'transform 0.2s',
+  },
+  ganttBarText: {
+    fontSize: '0.65rem',
+    fontWeight: '700',
+    color: '#ffffff',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    width: '100%',
+  },
+
+  // STYLES: Radar de Prazos
+  radarOuterContainer: {
+    padding: '2rem',
+    textAlign: 'center',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+  },
+  radarHeader: {
+    marginBottom: '1.5rem',
+  },
+  radarSvg: {
+    background: 'rgba(255, 255, 255, 0.4)',
+    borderRadius: '50%',
+    boxShadow: '0 8px 32px rgba(0,0,0,0.02)',
+    border: '1px solid var(--glass-border)',
+  },
+  radarMonthLabel: {
+    fontSize: '0.68rem',
+    fontWeight: 'bold',
+    fill: 'var(--text-muted)',
+  },
+  radarTooltip: {
+    position: 'absolute',
+    width: '180px',
+    padding: '0.6rem 0.8rem',
+    zIndex: 50,
+    textAlign: 'left',
+    boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
+  },
+  radarTooltipEmp: {
+    fontSize: '0.62rem',
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    color: 'var(--text-light)',
+  },
+  radarTooltipTitle: {
+    fontSize: '0.8rem',
+    margin: '2px 0 4px 0',
+    fontWeight: '600',
+    color: 'var(--text-main)',
+  },
+  radarTooltipDate: {
+    fontSize: '0.68rem',
+    color: 'var(--primary)',
+  },
+  radarLegend: {
+    display: 'flex',
+    gap: '1.5rem',
+    flexWrap: 'wrap',
+    marginTop: '1.5rem',
+    justifyContent: 'center',
+  },
+  radarLegendItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    fontSize: '0.75rem',
+  },
+  radarLegendOrb: {
+    fontSize: '0.6rem',
+    padding: '0.1rem 0.3rem',
+    borderRadius: '4px',
+    color: 'var(--text-muted)',
+  },
+
+  // STYLES: Lista Analítica
+  listContainer: {
+    padding: '1.5rem',
+  },
+  listFilterBar: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: '1rem',
+    marginBottom: '1.5rem',
+    flexWrap: 'wrap',
+  },
+  searchWrapper: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    background: 'rgba(255, 255, 255, 0.4)',
+    border: '1px solid var(--glass-border)',
+    borderRadius: '12px',
+    padding: '0.5rem 0.75rem',
+    minWidth: '280px',
+  },
+  searchInput: {
+    border: 'none',
+    background: 'transparent',
+    fontSize: '0.85rem',
+    outline: 'none',
+    color: 'var(--text-main)',
+    width: '100%',
+  },
+  listSelect: {
+    padding: '0.5rem 1rem',
+    borderRadius: '12px',
+    border: '1px solid var(--glass-border)',
+    background: 'rgba(255, 255, 255, 0.6)',
+    color: 'var(--text-main)',
+    fontSize: '0.85rem',
+    outline: 'none',
+    cursor: 'pointer',
+  },
+  table: {
+    width: '100%',
+    borderCollapse: 'collapse',
+    textAlign: 'left',
+  },
+  tableHeaderRow: {
+    borderBottom: '2px solid var(--glass-border)',
+  },
+  th: {
+    padding: '0.75rem 1rem',
+    fontSize: '0.85rem',
+    fontWeight: '700',
+    color: 'var(--text-light)',
+  },
+  tableRow: {
+    borderBottom: '1px solid rgba(0,0,0,0.03)',
+    cursor: 'pointer',
+    transition: 'background 0.2s',
+  },
+  td: {
+    padding: '0.85rem 1rem',
+    fontSize: '0.85rem',
+    color: 'var(--text-main)',
+  },
+  tdEmpty: {
+    padding: '2rem',
+    textAlign: 'center',
+    color: 'var(--text-light)',
+    fontStyle: 'italic',
+  },
+  statusBadge: {
+    fontSize: '0.7rem',
+    fontWeight: '700',
+    padding: '0.2rem 0.5rem',
+    borderRadius: '6px',
+    display: 'inline-block',
+  },
+  actionCircleBtn: {
+    border: 'none',
+    background: 'var(--glass-bg)',
+    border: '1px solid var(--glass-border)',
+    width: '28px',
+    height: '28px',
+    borderRadius: '50%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+  },
+
+  // Loader / Auxiliar
+  loaderContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '60vh',
+    width: '100%',
+  },
+  spinner: {
+    width: '40px',
+    height: '40px',
+    border: '4px solid var(--glass-border)',
+    borderTopColor: 'var(--primary)',
+    borderRadius: '50%',
+  },
+};
