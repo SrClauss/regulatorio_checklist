@@ -645,26 +645,29 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                   (() => {
                     const targetMonth = months[0];
                     if (!targetMonth) return null;
-                    const daysInMonth = new Date(targetMonth.year, targetMonth.month + 1, 0).getDate();
-                    const numWeeks = daysInMonth > 28 ? 5 : 4;
-                    const weekWidth = 80 / numWeeks;
-                    return Array.from({ length: numWeeks }).map((_, wIdx) => {
-                      const startDay = wIdx * 7 + 1;
-                      let endDay = (wIdx + 1) * 7;
-                      if (endDay > daysInMonth) endDay = daysInMonth;
+                    
+                    const firstDayDate = new Date(targetMonth.year, targetMonth.month, 1);
+                    const firstWeekday = firstDayDate.getDay(); // 0 = Sunday, 1 = Monday, etc.
+                    const weekdayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+                    
+                    return Array.from({ length: 7 }).map((_, colIdx) => {
+                      const weekdayIdx = (firstWeekday + colIdx) % 7;
+                      const weekdayName = weekdayNames[weekdayIdx];
+                      const leftPercent = 10 + (colIdx / 6) * 80;
                       
-                      const leftPercent = 10 + wIdx * weekWidth;
                       return (
                         <div 
-                          key={wIdx} 
+                          key={colIdx} 
                           style={{ 
                             ...styles.rulerWeekMark, 
                             left: `${leftPercent}%`, 
-                            width: `${weekWidth}%`,
+                            transform: 'translate(-50%, -50%)',
+                            width: '80px',
+                            textAlign: 'center',
                           }}
                         >
-                          <span style={styles.weekLabel}>Semana {wIdx + 1}</span>
-                          <span style={styles.weekRange}>Dias {startDay} - {endDay}</span>
+                          <span style={styles.weekLabel}>{weekdayName}</span>
+                          <span style={styles.weekRange}>{colIdx + 1}º dia</span>
                         </div>
                       );
                     });
@@ -680,6 +683,8 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
             </div>
 
             {months.map((m) => {
+              const isZoomed = zoomedMonth && zoomedMonth.key === m.key;
+
               let mTasks = tasksToRender.filter(t => {
                 if (!t.data_vencimento) return false;
                 const d = new Date(t.data_vencimento);
@@ -687,16 +692,260 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
               });
 
               const isCurrentMonth = m.month === currentMonth && m.year === currentYear;
-              const hasHoveredTask = mTasks.some(t => t._id === hoveredTaskId);
-              const isZoomed = zoomedMonth && zoomedMonth.key === m.key;
 
+              if (isZoomed) {
+                const daysInMonth = new Date(m.year, m.month + 1, 0).getDate();
+                const numWeeks = daysInMonth > 28 ? 5 : 4;
+                
+                return Array.from({ length: numWeeks }).map((_, wIdx) => {
+                  const startDay = wIdx * 7 + 1;
+                  let endDay = (wIdx + 1) * 7;
+                  if (endDay > daysInMonth) endDay = daysInMonth;
+                  
+                  // Tasks that fall into this specific week
+                  const wTasks = mTasks.filter(t => {
+                    const d = new Date(t.data_vencimento).getDate();
+                    return d >= startDay && d <= endDay;
+                  });
+                  
+                  const hasHoveredTask = wTasks.some(t => t._id === hoveredTaskId);
+                  
+                  return (
+                    <div 
+                      key={`${m.key}-week-${wIdx}`} 
+                      style={{
+                        ...styles.monthRow,
+                        height: '230px',
+                        background: isCurrentMonth ? 'rgba(37, 99, 235, 0.02)' : 'transparent',
+                        zIndex: hasHoveredTask ? 999 : 1,
+                        borderBottom: '1px solid rgba(0, 0, 0, 0.06)',
+                        overflow: 'hidden'
+                      }}
+                    >
+                      {/* Sticky Header for the week */}
+                      <div 
+                        style={{
+                          ...styles.monthStickyHeader,
+                          borderLeftColor: isCurrentMonth ? 'var(--primary)' : 'var(--glass-border)',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'center',
+                          userSelect: 'none'
+                        }}
+                        onClick={() => setZoomedMonth(null)}
+                        title="Clique para voltar para visão anual"
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '2px' }}>
+                          <ChevronLeft size={14} style={{ color: 'var(--primary)' }} />
+                          <span style={{
+                            ...styles.monthLabelText,
+                            fontWeight: '700',
+                            color: 'var(--primary)',
+                            margin: 0
+                          }}>
+                            Semana {wIdx + 1}
+                          </span>
+                        </div>
+                        <span style={styles.monthTaskCount}>
+                          Dias {startDay} - {endDay}
+                        </span>
+                        <span style={{ ...styles.monthTaskCount, fontSize: '0.62rem', opacity: 0.8 }}>
+                          {wTasks.length} {wTasks.length === 1 ? 'tarefa' : 'tarefas'}
+                        </span>
+                      </div>
+
+                      {/* Timeline track for the week */}
+                      <div style={styles.monthTimelineTrack}>
+                        <div style={styles.horizontalLine}></div>
+                        
+                        {/* Visual day ticks and vertical grid lines inside the week track */}
+                        {Array.from({ length: 7 }).map((_, dIdx) => {
+                          const dayOffset = dIdx;
+                          const currentDay = startDay + dayOffset;
+                          if (currentDay > endDay) return null;
+                          
+                          const tickPercent = 10 + (dIdx / 6) * 80;
+                          return (
+                            <div key={dIdx}>
+                              {/* Vertical line for the day column */}
+                              <div style={{
+                                position: 'absolute',
+                                left: `${tickPercent}%`,
+                                top: 0,
+                                bottom: 0,
+                                width: '1px',
+                                borderLeft: '1px dashed rgba(0, 0, 0, 0.05)',
+                                zIndex: 2,
+                                pointerEvents: 'none'
+                              }}></div>
+                              
+                              {/* Day number label */}
+                              <span style={{
+                                position: 'absolute',
+                                left: `${tickPercent}%`,
+                                bottom: '4px',
+                                transform: 'translateX(-50%)',
+                                fontSize: '0.62rem',
+                                fontWeight: '700',
+                                color: 'var(--text-muted)',
+                                opacity: 0.7,
+                                zIndex: 3,
+                                pointerEvents: 'none'
+                              }}>
+                                {currentDay}
+                              </span>
+
+                              {/* Day number/tick marking */}
+                              <div 
+                                style={{
+                                  ...styles.dayTick,
+                                  left: `${tickPercent}%`,
+                                  height: '10px',
+                                  opacity: 0.5,
+                                  background: 'var(--text-main)'
+                                }}
+                                title={`Dia ${currentDay}`}
+                              ></div>
+                            </div>
+                          );
+                        })}
+
+                        {/* Render tasks for this week */}
+                        {wTasks.map((t, tIdx) => {
+                          const tDate = new Date(t.data_vencimento);
+                          const day = tDate.getDate();
+                          const dayOffset = day - startDay;
+                          const leftPercent = 10 + (dayOffset / 6) * 80;
+                          const isEven = tIdx % 2 === 0;
+                          const isHovered = hoveredTaskId === t._id;
+
+                          const empresaNome = getEmpresaNome(t.empresa_id);
+                          const csNome = getClasseServicoNome(t.classe_servico_id);
+                          const color = getTaskStatusColor(t);
+
+                          const displayTitle = showOnlyServiceClass ? csNome : t.titulo;
+
+                          return (
+                            <div 
+                              key={t._id} 
+                              style={{
+                                ...styles.nodeWrapper,
+                                left: `${leftPercent}%`,
+                                zIndex: isHovered ? 1000 : 5
+                              }}
+                            >
+                              <div 
+                                style={{
+                                  ...styles.nodeDot,
+                                  background: color,
+                                  boxShadow: isHovered ? `0 0 14px 4px ${color}` : `0 0 8px ${color}`,
+                                  transform: isHovered ? 'scale(1.4)' : 'scale(1)'
+                                }}
+                                onClick={() => onViewTask && onViewTask(t._id)}
+                                onMouseEnter={() => handleMouseEnterTask(t._id)}
+                                onMouseLeave={handleMouseLeaveTask}
+                              ></div>
+
+                              <div style={{
+                                ...styles.verticalConnector,
+                                ...(isEven ? styles.connectorEven : styles.connectorOdd),
+                                borderColor: color,
+                                borderLeftWidth: isHovered ? '3px' : '1px',
+                                borderStyle: isHovered ? 'solid' : 'dashed',
+                                opacity: isHovered ? 1 : 0.4
+                              }}></div>
+                              
+                              <div 
+                                className="interactive-card"
+                                style={{
+                                  ...styles.timelineCompactCard,
+                                  ...(isEven ? styles.cardEven : styles.cardOdd),
+                                  ...(isHovered && {
+                                    transform: 'translateX(-50%) scale(1.08)',
+                                    background: '#ffffff',
+                                    zIndex: 1000,
+                                    boxShadow: '0 12px 36px rgba(0, 0, 0, 0.18)'
+                                  }),
+                                  borderLeftColor: color
+                                }}
+                                onClick={() => onViewTask && onViewTask(t._id)}
+                                onMouseEnter={() => handleMouseEnterTask(t._id)}
+                                onMouseLeave={handleMouseLeaveTask}
+                              >
+                                <div style={styles.cardHeaderMini}>
+                                  <span style={{
+                                    ...styles.tagMini,
+                                    ...getTaskStatusBadgeStyle(t)
+                                  }}>
+                                    Dia {day}
+                                  </span>
+                                  <span style={styles.cardCompanyMini} title={empresaNome}>
+                                    {empresaNome}
+                                  </span>
+                                </div>
+
+                                <h6 style={styles.cardTitleMini} title={isHovered ? t.titulo : displayTitle}>
+                                  {isHovered ? t.titulo : displayTitle}
+                                </h6>
+                                
+                                <div style={styles.cardFooterMini}>
+                                  <span style={styles.cardValMini}>R$ {t.valor_estimado || 0}</span>
+                                  
+                                  <div style={{ display: 'flex', gap: '4px' }}>
+                                    {t.status !== 'Concluído' && (
+                                      <button 
+                                        style={{ ...styles.actionMicroBtn, color: 'var(--success)' }} 
+                                        onClick={(e) => { e.stopPropagation(); handleConcludeTask(t._id); }}
+                                        title="Concluir condicionante"
+                                      >
+                                        <CheckCircle2 size={12} />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {isHovered && (
+                                  <div style={styles.expandedDetails} className="animate-fade-in">
+                                    <div style={styles.detailDivider}></div>
+                                    <div style={styles.expandedField}>
+                                      <strong>Documento:</strong> {getDocumentoInfo(t.documento_id)}
+                                    </div>
+                                    <div style={styles.expandedField}>
+                                      <strong>Classe:</strong> {csNome}
+                                    </div>
+                                    {getPrestadorNome(t.classe_servico_id) && (
+                                      <div style={styles.expandedField}>
+                                        <strong>Prestador:</strong>{' '}
+                                        <a 
+                                          href={`#/prestadores/${getPrestadorId(t.classe_servico_id)}`} 
+                                          style={{ color: 'var(--primary)', textDecoration: 'underline' }}
+                                        >
+                                          {getPrestadorNome(t.classe_servico_id)}
+                                        </a>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                });
+              }
+
+              // Standard View (All months)
+              const hasHoveredTask = mTasks.some(t => t._id === hoveredTaskId);
               return (
                 <div 
                   key={m.key} 
                   id={isCurrentMonth ? 'current-month-row' : undefined}
                   style={{
                     ...styles.monthRow,
-                    height: isZoomed ? '380px' : '230px',
+                    height: '230px',
                     background: isCurrentMonth ? 'rgba(37, 99, 235, 0.02)' : 'transparent',
                     zIndex: hasHoveredTask ? 999 : 1,
                     transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -714,14 +963,10 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                       userSelect: 'none'
                     }}
                     onClick={() => handleMonthClick(m)}
-                    title={isZoomed ? "Clique para voltar para visão anual" : "Clique para focar neste mês em semanas"}
+                    title="Clique para focar neste mês em semanas"
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '2px' }}>
-                      {isZoomed ? (
-                        <ChevronLeft size={14} style={{ color: 'var(--primary)' }} />
-                      ) : (
-                        <ChevronRight size={14} style={{ color: 'var(--text-muted)' }} />
-                      )}
+                      <ChevronRight size={14} style={{ color: 'var(--text-muted)' }} />
                       <span style={{
                         ...styles.monthLabelText,
                         fontWeight: isCurrentMonth ? '700' : '500',
@@ -739,82 +984,28 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                   <div style={styles.monthTimelineTrack}>
                     <div style={styles.horizontalLine}></div>
 
-                    {isZoomed ? (
-                      (() => {
-                        const daysInMonth = new Date(m.year, m.month + 1, 0).getDate();
-                        const numWeeks = daysInMonth > 28 ? 5 : 4;
-                        const weekWidth = 80 / numWeeks;
-                        return (
-                          <>
-                            {/* Visual grid columns for weeks */}
-                            {Array.from({ length: numWeeks }).map((_, wIdx) => {
-                              const leftPercent = 10 + wIdx * weekWidth;
-                              return (
-                                <div 
-                                  key={`week-bg-${wIdx}`} 
-                                  style={{
-                                    position: 'absolute',
-                                    left: `${leftPercent}%`,
-                                    top: 0,
-                                    bottom: 0,
-                                    width: `${weekWidth}%`,
-                                    background: wIdx % 2 === 0 ? 'rgba(37, 99, 235, 0.015)' : 'transparent',
-                                    zIndex: 1,
-                                    pointerEvents: 'none'
-                                  }}
-                                ></div>
-                              );
-                            })}
-
-                            {/* Separator lines between weeks */}
-                            {Array.from({ length: numWeeks + 1 }).map((_, wIdx) => {
-                              const leftPercent = 10 + wIdx * weekWidth;
-                              return (
-                                <div 
-                                  key={`week-sep-${wIdx}`} 
-                                  style={{
-                                    position: 'absolute',
-                                    left: `${leftPercent}%`,
-                                    top: 0,
-                                    bottom: 0,
-                                    width: '1px',
-                                    borderLeft: wIdx === 0 || wIdx === numWeeks 
-                                      ? '2px solid rgba(37, 99, 235, 0.25)' 
-                                      : '1px dashed rgba(37, 99, 235, 0.15)',
-                                    zIndex: 2,
-                                    pointerEvents: 'none'
-                                  }}
-                                ></div>
-                              );
-                            })}
-                          </>
-                        );
-                      })()
-                    ) : (
-                      Array.from({ length: 30 }).map((_, dIdx) => {
-                        const dayNum = dIdx + 1;
-                        const tickPercent = 10 + (dIdx / 29) * 80;
-                        const isMajor = dayNum === 1 || dayNum % 5 === 0;
-                        return (
-                          <div 
-                            key={dIdx} 
-                            style={{
-                              ...styles.dayTick,
-                              left: `${tickPercent}%`,
-                              height: isMajor ? '12px' : '6px',
-                              opacity: isMajor ? 0.6 : 0.25,
-                              background: isMajor ? 'var(--text-main)' : 'var(--text-light)'
-                            }}
-                          ></div>
-                        );
-                      })
-                    )}
+                    {Array.from({ length: 30 }).map((_, dIdx) => {
+                      const dayNum = dIdx + 1;
+                      const tickPercent = 10 + (dIdx / 29) * 80;
+                      const isMajor = dayNum === 1 || dayNum % 5 === 0;
+                      return (
+                        <div 
+                          key={dIdx} 
+                          style={{
+                            ...styles.dayTick,
+                            left: `${tickPercent}%`,
+                            height: isMajor ? '12px' : '6px',
+                            opacity: isMajor ? 0.6 : 0.25,
+                            background: isMajor ? 'var(--text-main)' : 'var(--text-light)'
+                          }}
+                        ></div>
+                      );
+                    })}
 
                     {mTasks.map((t, tIdx) => {
                       const tDate = new Date(t.data_vencimento);
                       const day = tDate.getDate();
-                      const daysInMonth = new Date(m.year, m.month + 1, 0).getDate();
-                      const leftPercent = getDayXPercent(day, daysInMonth, isZoomed);
+                      const leftPercent = 10 + ((day - 1) / 30) * 80;
                       const isEven = tIdx % 2 === 0;
                       const isHovered = hoveredTaskId === t._id;
 
@@ -823,29 +1014,6 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                       const color = getTaskStatusColor(t);
 
                       const displayTitle = showOnlyServiceClass ? csNome : t.titulo;
-
-                      const connectorStyle = isZoomed
-                        ? (isEven 
-                            ? { ...styles.verticalConnector, bottom: '10px', height: '110px' } 
-                            : { ...styles.verticalConnector, top: '10px', height: '110px' })
-                        : (isEven 
-                            ? { ...styles.verticalConnector, ...styles.connectorEven } 
-                            : { ...styles.verticalConnector, ...styles.connectorOdd });
-
-                      const cardStyle = {
-                        ...styles.timelineCompactCard,
-                        ...(isZoomed
-                          ? (isEven ? { top: '-180px' } : { top: '72px' })
-                          : (isEven ? styles.cardEven : styles.cardOdd)
-                        ),
-                        ...(isHovered && {
-                          transform: 'translateX(-50%) scale(1.08)',
-                          background: '#ffffff',
-                          zIndex: 1000,
-                          boxShadow: '0 12px 36px rgba(0, 0, 0, 0.18)'
-                        }),
-                        borderLeftColor: color
-                      };
 
                       return (
                         <div 
@@ -869,7 +1037,8 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                           ></div>
 
                           <div style={{
-                            ...connectorStyle,
+                            ...styles.verticalConnector,
+                            ...(isEven ? styles.connectorEven : styles.connectorOdd),
                             borderColor: color,
                             borderLeftWidth: isHovered ? '3px' : '1px',
                             borderStyle: isHovered ? 'solid' : 'dashed',
@@ -878,7 +1047,17 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                           
                           <div 
                             className="interactive-card"
-                            style={cardStyle}
+                            style={{
+                              ...styles.timelineCompactCard,
+                              ...(isEven ? styles.cardEven : styles.cardOdd),
+                              ...(isHovered && {
+                                transform: 'translateX(-50%) scale(1.08)',
+                                background: '#ffffff',
+                                zIndex: 1000,
+                                boxShadow: '0 12px 36px rgba(0, 0, 0, 0.18)'
+                              }),
+                              borderLeftColor: color
+                            }}
                             onClick={() => onViewTask && onViewTask(t._id)}
                             onMouseEnter={() => handleMouseEnterTask(t._id)}
                             onMouseLeave={handleMouseLeaveTask}
