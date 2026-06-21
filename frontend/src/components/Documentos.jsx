@@ -20,6 +20,12 @@ export default function Documentos({ user, onViewDocument, onGoToCompany }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedOrgao, setSelectedOrgao] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Reset pagination on filter change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedOrgao, selectedStatus]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -74,6 +80,13 @@ export default function Documentos({ user, onViewDocument, onGoToCompany }) {
 
     return matchesSearch && matchesOrgao && matchesStatus;
   });
+
+  const ITEMS_PER_PAGE = 12;
+  const totalPages = Math.ceil(filteredDocs.length / ITEMS_PER_PAGE);
+  const paginatedDocs = filteredDocs.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
 
   if (loading) {
     return (
@@ -132,7 +145,7 @@ export default function Documentos({ user, onViewDocument, onGoToCompany }) {
 
       {/* Grid de Cartões de Documento */}
       <div style={styles.grid} className="documentos-grid">
-        {filteredDocs.map(doc => {
+        {paginatedDocs.map(doc => {
           const isExpired = new Date(doc.data_vencimento) < new Date();
           const companyName = getEmpresaNome(doc.empresa_id);
           const segment = getEmpresaSegmento(doc.empresa_id);
@@ -198,6 +211,39 @@ export default function Documentos({ user, onViewDocument, onGoToCompany }) {
           </div>
         )}
       </div>
+
+      {/* Paginação */}
+      {totalPages > 1 && (
+        <div style={styles.paginationRow}>
+          <button 
+            disabled={currentPage === 1}
+            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+            className="glass-button"
+            style={{
+              ...styles.pageBtn,
+              opacity: currentPage === 1 ? 0.5 : 1,
+              cursor: currentPage === 1 ? 'not-allowed' : 'pointer'
+            }}
+          >
+            Anterior
+          </button>
+          <span style={styles.pageInfo}>
+            Página <strong style={{ color: 'var(--primary)' }}>{currentPage}</strong> de {totalPages} ({filteredDocs.length} documentos)
+          </span>
+          <button 
+            disabled={currentPage === totalPages}
+            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+            className="glass-button"
+            style={{
+              ...styles.pageBtn,
+              opacity: currentPage === totalPages ? 0.5 : 1,
+              cursor: currentPage === totalPages ? 'not-allowed' : 'pointer'
+            }}
+          >
+            Próxima
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -345,5 +391,27 @@ const styles = {
     border: '4px solid var(--glass-border)',
     borderTopColor: 'var(--primary)',
     borderRadius: '50%',
+  },
+  paginationRow: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: '1.5rem',
+    marginTop: '2.5rem',
+    padding: '1rem',
+  },
+  pageBtn: {
+    padding: '0.5rem 1rem',
+    border: '1px solid var(--glass-border)',
+    background: 'rgba(255, 255, 255, 0.4)',
+    borderRadius: '8px',
+    fontSize: '0.85rem',
+    fontWeight: '600',
+    color: 'var(--text-main)',
+    transition: 'all 0.2s',
+  },
+  pageInfo: {
+    fontSize: '0.85rem',
+    color: 'var(--text-muted)',
   },
 };

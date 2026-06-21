@@ -25,6 +25,12 @@ export default function Empresas({ user, onViewCompany }) {
   // Filtros
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSegment, setSelectedSegment] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Reset pagination on filter change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedSegment]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -89,6 +95,13 @@ export default function Empresas({ user, onViewCompany }) {
     return matchSearch && matchSegment;
   });
 
+  const ITEMS_PER_PAGE = 12;
+  const totalPages = Math.ceil(filteredEmpresas.length / ITEMS_PER_PAGE);
+  const paginatedEmpresas = filteredEmpresas.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+
   const segmentosUnicos = [...new Set(empresas.map(emp => emp.segmento))];
 
   if (loading) {
@@ -137,7 +150,7 @@ export default function Empresas({ user, onViewCompany }) {
 
       {/* Grid de Empresas */}
       <div style={styles.grid} className="empresas-grid">
-        {filteredEmpresas.map(emp => {
+        {paginatedEmpresas.map(emp => {
           const stats = getEmpresaStats(emp._id);
           return (
             <div 
@@ -198,6 +211,39 @@ export default function Empresas({ user, onViewCompany }) {
           );
         })}
       </div>
+
+      {/* Paginação */}
+      {totalPages > 1 && (
+        <div style={styles.paginationRow}>
+          <button 
+            disabled={currentPage === 1}
+            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+            className="glass-button"
+            style={{
+              ...styles.pageBtn,
+              opacity: currentPage === 1 ? 0.5 : 1,
+              cursor: currentPage === 1 ? 'not-allowed' : 'pointer'
+            }}
+          >
+            Anterior
+          </button>
+          <span style={styles.pageInfo}>
+            Página <strong style={{ color: 'var(--primary)' }}>{currentPage}</strong> de {totalPages} ({filteredEmpresas.length} empresas)
+          </span>
+          <button 
+            disabled={currentPage === totalPages}
+            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+            className="glass-button"
+            style={{
+              ...styles.pageBtn,
+              opacity: currentPage === totalPages ? 0.5 : 1,
+              cursor: currentPage === totalPages ? 'not-allowed' : 'pointer'
+            }}
+          >
+            Próxima
+          </button>
+        </div>
+      )}
 
     </div>
   );
@@ -555,5 +601,27 @@ const styles = {
     border: '4px solid var(--glass-border)',
     borderTopColor: 'var(--primary)',
     borderRadius: '50%',
+  },
+  paginationRow: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: '1.5rem',
+    marginTop: '2.5rem',
+    padding: '1rem',
+  },
+  pageBtn: {
+    padding: '0.5rem 1rem',
+    border: '1px solid var(--glass-border)',
+    background: 'rgba(255, 255, 255, 0.4)',
+    borderRadius: '8px',
+    fontSize: '0.85rem',
+    fontWeight: '600',
+    color: 'var(--text-main)',
+    transition: 'all 0.2s',
+  },
+  pageInfo: {
+    fontSize: '0.85rem',
+    color: 'var(--text-muted)',
   },
 };

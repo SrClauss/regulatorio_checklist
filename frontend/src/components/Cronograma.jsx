@@ -25,6 +25,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   
   const [todasTarefas, setTodasTarefas] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingTasks, setLoadingTasks] = useState(false);
 
   // Entidades auxiliares para mapear IDs para nomes
   const [empresas, setEmpresas] = useState([]);
@@ -114,24 +115,57 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   const animationFrameIdRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
 
+  const fetchTasks = async (companyId, csId) => {
+    try {
+      setLoadingTasks(true);
+      const now = new Date();
+      const dateStart = new Date(now.getFullYear(), now.getMonth() - 3, 1).toISOString();
+      const dateEnd = new Date(now.getFullYear(), now.getMonth() + 13, 1).toISOString();
+      
+      const filters = {};
+      if (companyId) filters.empresa_id = companyId;
+      if (csId) filters.classe_servico_id = csId;
+      
+      const [timelineTasks, overdueTasks] = await Promise.all([
+        api.listTarefas({
+          ...filters,
+          data_inicio: dateStart,
+          data_fim: dateEnd
+        }),
+        api.listTarefas({
+          ...filters,
+          status: 'Atrasado'
+        })
+      ]);
+      
+      const mergedMap = {};
+      timelineTasks.forEach(t => mergedMap[t._id] = t);
+      overdueTasks.forEach(t => mergedMap[t._id] = t);
+      
+      setTodasTarefas(Object.values(mergedMap));
+    } catch (error) {
+      console.error("Erro ao carregar tarefas do cronograma:", error);
+    } finally {
+      setLoadingTasks(false);
+    }
+  };
+
   const fetchCronogramaData = async () => {
     try {
       setLoading(true);
-      // Carrega todas as tarefas (sem filtrar por Pendente para ter concluídas no Kanban e Lista)
-      const [empList, docList, csList, prList, tarefas] = await Promise.all([
+      const [empList, docList, csList, prList] = await Promise.all([
         api.listEmpresas(),
         api.listDocumentos(),
         api.listClasseServicos(),
-        api.listPrestadores(),
-        api.listTarefas() // Puxa todas as condicionantes
+        api.listPrestadores()
       ]);
 
       setEmpresas(empList);
       setDocumentos(docList);
       setClasseServicos(csList);
       setPrestadores(prList);
-      setTodasTarefas(tarefas);
-
+      
+      await fetchTasks(selectedCompanyId, selectedClasseServicoId);
     } catch (error) {
       console.error("Erro ao carregar dados do cronograma completo:", error);
     } finally {
@@ -142,6 +176,12 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   useEffect(() => {
     fetchCronogramaData();
   }, [user]);
+
+  useEffect(() => {
+    if (!loading) {
+      fetchTasks(selectedCompanyId, selectedClasseServicoId);
+    }
+  }, [selectedCompanyId, selectedClasseServicoId]);
 
   // Centraliza o scroll no mês atual ao entrar na linha do tempo
   useEffect(() => {
@@ -1422,7 +1462,13 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   }
 
   return (
-    <div className="animate-fade-in" style={styles.container}>
+    <div className="animate-fade-in" style={{ ...styles.container, position: 'relative' }}>
+      {loadingTasks && (
+        <div style={styles.tasksLoadingIndicator}>
+          <div className="animate-spin" style={styles.microSpinner}></div>
+          <span>Carregando...</span>
+        </div>
+      )}
       {/* Header */}
       <header style={styles.header}>
         <div>
@@ -2569,5 +2615,30 @@ const styles = {
     fontSize: '0.85rem',
     color: 'var(--text-muted)',
     fontWeight: '550',
+  },
+  tasksLoadingIndicator: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    background: 'rgba(255, 255, 255, 0.75)',
+    backdropFilter: 'blur(8px)',
+    border: '1px solid var(--glass-border)',
+    borderRadius: '20px',
+    padding: '0.4rem 0.8rem',
+    fontSize: '0.8rem',
+    fontWeight: '600',
+    color: 'var(--primary)',
+    position: 'absolute',
+    top: '1.5rem',
+    right: '1.5rem',
+    boxShadow: 'var(--shadow-sm)',
+    zIndex: 1000,
+  },
+  microSpinner: {
+    width: '12px',
+    height: '12px',
+    border: '2px solid rgba(37, 99, 235, 0.1)',
+    borderTopColor: 'var(--primary)',
+    borderRadius: '50%',
   },
 };

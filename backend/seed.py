@@ -345,77 +345,104 @@ async def run_seed():
         segmento = emp["seg"]
         if segmento in templates_dict:
             _, template = templates_dict[segmento]
-            
             validade_meses = template.validade_meses_padrao
-            data_vencimento_emp = add_months(data_emissao_emp, validade_meses)
             
-            # Status do documento principal
-            status_doc = "Ativo" if data_vencimento_emp > hoje else "Vencido"
-            
-            doc_db = DocumentoDB(
-                empresa_id=emp_id,
-                tipo=template.nome_documento,
-                orgao=f"Órgão Regulador {segmento}",
-                numero_processo=f"2026/{segmento[:3].upper()}-{idx:03d}A",
-                data_emissao=data_emissao_emp,
-                data_vencimento=data_vencimento_emp,
-                status=status_doc,
-                valor_renovacao=template.valor_renovacao_sugerido,
-                responsavel_renovacao_id=consultor_id
-            )
-            doc_res = await db.documentos.insert_one(doc_db.model_dump(by_alias=True, exclude={"id"}))
-            doc_id = doc_res.inserted_id
-            total_docs += 1
-            
-            # 4. Cria Tarefas Condicionantes baseadas nas sugestões do template
-            tarefas_empresa = []
-            for cond in template.condicionantes_sugeridas:
-                freq = cond.frequencia_meses
-                data_corrente = add_months(data_emissao_emp, freq)
-                periodicidade = "Mensal" if freq == 1 else "Outra"
+            # loop para simular renovações históricas até o futuro (hoje + 12 meses)
+            current_emissao = data_emissao_emp
+            while current_emissao < hoje + timedelta(days=365):
+                data_vencimento_emp = add_months(current_emissao, validade_meses)
                 
-                while data_corrente <= data_vencimento_emp:
-                    resp_id = cliente_id if cond.cliente_executa else consultor_id
+                # status do documento
+                if data_vencimento_emp < hoje:
+                    status_doc = "Vencido"
+                elif current_emissao <= hoje <= data_vencimento_emp:
+                    status_doc = "Ativo"
+                else:
+                    status_doc = "Ativo"  # Futuro/Planejado
+                
+                doc_db = DocumentoDB(
+                    empresa_id=emp_id,
+                    tipo=template.nome_documento,
+                    orgao=f"Órgão Regulador {segmento}",
+                    numero_processo=f"2026/{segmento[:3].upper()}-{idx:03d}A",
+                    data_emissao=current_emissao,
+                    data_vencimento=data_vencimento_emp,
+                    status=status_doc,
+                    valor_renovacao=template.valor_renovacao_sugerido,
+                    responsavel_renovacao_id=consultor_id
+                )
+                doc_res = await db.documentos.insert_one(doc_db.model_dump(by_alias=True, exclude={"id"}))
+                doc_id = doc_res.inserted_id
+                total_docs += 1
+                
+                # 4. Cria Tarefas Condicionantes baseadas nas sugestões do template para este ciclo do documento
+                tarefas_empresa = []
+                for cond in template.condicionantes_sugeridas:
+                    freq = cond.frequencia_meses
+                    data_corrente = add_months(current_emissao, freq)
+                    periodicidade = "Mensal" if freq == 1 else "Outra"
                     
-                    # Determina o status com base na data da condicionante (se é passada ou futura)
-                    if data_corrente < hoje:
-                        status_tarefa = "Concluído"
-                    else:
-                        # Próximas tarefas (vencendo em breve) ficam em andamento
-                        status_tarefa = "Em Andamento" if (data_corrente - hoje).days < 20 else "Pendente"
-                    
-                    nova_tarefa = TarefaDB(
-                        documento_id=doc_id,
-                        empresa_id=emp_id,
-                        classe_servico_id=get_classe_servico_id_for_title(cond.titulo),
-                        titulo=cond.titulo,
-                        descricao=f"Condicionante periódica de {cond.titulo} vinculada ao documento {template.nome_documento}.",
-                        tipo_id="checklist_interno",
-                        cliente_executa=cond.cliente_executa,
-                        status=status_tarefa,
-                        responsavel_id=resp_id,
-                        data_vencimento=data_corrente,
-                        valor_estimado=cond.valor_sugerido,
-                        custo_projetado=cond.valor_sugerido * 0.7,
-                        periodicidade=periodicidade,
-                        historico_observacoes=[
-                            HistoricoObservacao(
-                                usuario_id=admin_id,
-                                texto="Gerada automaticamente pelo distribuidor de seed."
-                            )
-                        ]
-                    )
-                    tarefas_empresa.append(nova_tarefa.model_dump(by_alias=True, exclude={"id"}))
-                    data_corrente = add_months(data_corrente, freq)
-                    
-            if tarefas_empresa:
-                await db.tarefas.insert_many(tarefas_empresa)
-                total_tarefas += len(tarefas_empresa)
+                    while data_corrente <= data_vencimento_emp:
+                        resp_id = cliente_id if cond.cliente_executa else consultor_id
+                        
+                        # Determina o status com base na data da condicionante (se é passada ou futura)
+                        if data_corrente < hoje:
+                            # 85% Concluído, 15% Atrasado
+                            if (idx + data_corrente.month) % 7 == 0:
+                                status_tarefa = "Atrasado"
+                            else:
+                                status_tarefa = "Concluído"
+                        else:
+                            # Vencimento futuro
+                            if (data_corrente - hoje).days < 20:
+                                status_tarefa = "Em Andamento" if idx % 2 == 0 else "Pendente"
+                            else:
+                                status_tarefa = "Pendente"
+                                
+                        data_conclusao_val = data_corrente if status_tarefa == "Concluído" else None
+                        
+                        nova_tarefa = TarefaDB(
+                            documento_id=doc_id,
+                            empresa_id=emp_id,
+                            classe_servico_id=get_classe_servico_id_for_title(cond.titulo),
+                            titulo=cond.titulo,
+                            descricao=f"Condicionante periódica de {cond.titulo} vinculada ao documento {template.nome_documento}.",
+                            tipo_id="checklist_interno",
+                            cliente_executa=cond.cliente_executa,
+                            status=status_tarefa,
+                            responsavel_id=resp_id,
+                            data_vencimento=data_corrente,
+                            valor_estimado=cond.valor_sugerido,
+                            custo_projetado=cond.valor_sugerido * 0.7,
+                            periodicidade=periodicidade,
+                            data_conclusao=data_conclusao_val,
+                            historico_observacoes=[
+                                HistoricoObservacao(
+                                    usuario_id=admin_id,
+                                    texto="Gerada automaticamente pelo distribuidor de seed."
+                                )
+                            ]
+                        )
+                        tarefas_empresa.append(nova_tarefa.model_dump(by_alias=True, exclude={"id"}))
+                        data_corrente = add_months(data_corrente, freq)
+                        
+                if tarefas_empresa:
+                    await db.tarefas.insert_many(tarefas_empresa)
+                    total_tarefas += len(tarefas_empresa)
+                
+                # Avança para o próximo ciclo de documento
+                current_emissao = data_vencimento_emp
                 
         # 5. Adiciona uma tarefa avulsa de rotina distribuída no tempo
-        dias_offset = (idx * 7) % 45 - 15  # Varia de -15 a +30 dias da data atual
+        dias_offset = (idx * 17) % 730 - 365  # Varia de -365 a +365 dias da data atual
         data_vencimento_extra = hoje + timedelta(days=dias_offset)
-        status_extra = "Concluído" if data_vencimento_extra < hoje else "Pendente"
+        
+        if data_vencimento_extra < hoje:
+            status_extra = "Concluído" if idx % 5 != 0 else "Atrasado"
+        else:
+            status_extra = "Pendente" if idx % 2 == 0 else "Em Andamento"
+            
+        data_conclusao_extra = data_vencimento_extra if status_extra == "Concluído" else None
         
         t_extra = TarefaDB(
             documento_id=None,
@@ -428,6 +455,7 @@ async def run_seed():
             status=status_extra,
             responsavel_id=cliente_id,
             data_vencimento=data_vencimento_extra,
+            data_conclusao=data_conclusao_extra,
             valor_estimado=0.0,
             custo_projetado=0.0,
             periodicidade="Semanal" if idx % 2 == 0 else "Diária",
