@@ -339,7 +339,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                     ...styles.monthRow,
                     height: '230px',
                     background: isCurrentMonth ? 'rgba(37, 99, 235, 0.02)' : 'transparent',
-                    zIndex: hasHoveredTask ? 30 : 1
+                    zIndex: hasHoveredTask ? 999 : 1
                   }}
                 >
                   <div style={{
@@ -398,7 +398,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                           style={{
                             ...styles.nodeWrapper,
                             left: `${leftPercent}%`,
-                            zIndex: isHovered ? 100 : 5
+                            zIndex: isHovered ? 1000 : 5
                           }}
                         >
                           <div 
@@ -431,7 +431,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                                 ...(isHovered && {
                                   transform: 'translateX(-50%) scale(1.08)',
                                   background: '#ffffff',
-                                  zIndex: 100,
+                                  zIndex: 1000,
                                   boxShadow: '0 12px 36px rgba(0, 0, 0, 0.18)'
                                 }),
                                 borderLeftColor: color
@@ -1015,6 +1015,8 @@ const styles = {
     flexDirection: 'column',
     width: '1400px',
     position: 'relative',
+    paddingTop: '60px',
+    paddingBottom: '60px',
   },
   rulerRow: {
     display: 'flex',
