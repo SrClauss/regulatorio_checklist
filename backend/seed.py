@@ -103,7 +103,19 @@ async def run_seed():
         ("Elaboração/Revisão do PGRSS", "Documento do Plano de Gerenciamento de Resíduos de Serviços de Saúde.", pid_solucoes),
         ("Teste de Estanqueidade do Sistema", "Verificação técnica contra vazamentos em tanques subterrâneos.", pid_solucoes),
         ("Limpeza e Laudo da Caixa SAO", "Remoção de lodo e aferição de separador de água e óleo.", pid_controlx),
-        ("Relatório Anual RAPP IBAMA", "Preenchimento e emissão do relatório anual do Ibama.", pid_solucoes)
+        ("Relatório Anual RAPP IBAMA", "Preenchimento e emissão do relatório anual do Ibama.", pid_solucoes),
+        
+        ("Análise de Água de Poço de Monitoramento", "Análises laboratoriais de poços de monitoramento ambiental.", pid_aquaclean),
+        ("Laudo de Emissões Atmosféricas", "Medições e emissão de laudo de chaminés e poluentes atmosféricos.", pid_aquaclean),
+        ("Relatório de Geração de Resíduos Sólidos", "Compilação de inventários de resíduos para órgãos ambientais.", pid_solucoes),
+        ("Monitoramento de Ruído Limítrofe", "Medições de pressão sonora no entorno de instalações.", pid_calibramed),
+        ("Coleta de Resíduos de Saúde (Grupo A/B)", "Serviços de transporte e destinação final de resíduos biológicos/químicos.", pid_solucoes),
+        ("Laudo de Radioproteção e Calibração", "Ensaios de radiação e aferição de equipamentos de imagem diagnóstica.", pid_calibramed),
+        ("Treinamento MOPP de Motoristas", "Capacitação profissional para transporte de produtos perigosos.", pid_calibramed),
+        ("Ficha de Emergência e Envelopamento", "Elaboração de documentos de transporte rodoviário regulamentado.", pid_solucoes),
+        ("Plano de Atendimento a Emergências (PAE)", "Manual de procedimentos para contingência de acidentes e vazamentos.", pid_solucoes),
+        ("Envio de BMPO (Psicotrópicos)", "Relatório mensal de movimentação de portaria regulamentada de medicamentos.", pid_solucoes),
+        ("Revisão de Manual de Boas Práticas e POPs", "Adequação de manuais sanitários e POPs da vigilância sanitária.", pid_solucoes)
     ]
     
     class_map = {}
@@ -112,15 +124,17 @@ async def run_seed():
         cs_res = await db.classe_servicos.insert_one(cs.model_dump(by_alias=True, exclude={"id"}))
         class_map[nome] = cs_res.inserted_id
 
-    print("-> 7 Classes de Serviço cadastradas.")
+    print(f"-> {len(classes_data)} Classes de Serviço cadastradas.")
 
     def get_classe_servico_id_for_title(title: str):
         title_lower = title.lower()
         if "dedetização" in title_lower or "pragas" in title_lower:
             return class_map.get("Dedetização / Controle de Pragas")
-        elif "potabilidade" in title_lower or "análise de água" in title_lower:
+        elif "potabilidade" in title_lower or "análise de água de consumo" in title_lower or "análise de potabilidade" in title_lower:
             return class_map.get("Análise de Potabilidade de Água")
         elif "calibração" in title_lower or "termômetro" in title_lower or "balança" in title_lower:
+            if "radioproteção" in title_lower:
+                return class_map.get("Laudo de Radioproteção e Calibração")
             return class_map.get("Calibração de Termômetros e Balanças")
         elif "pgrss" in title_lower:
             return class_map.get("Elaboração/Revisão do PGRSS")
@@ -130,6 +144,28 @@ async def run_seed():
             return class_map.get("Limpeza e Laudo da Caixa SAO")
         elif "rapp ibama" in title_lower or "ibama" in title_lower:
             return class_map.get("Relatório Anual RAPP IBAMA")
+        elif "poço de monitoramento" in title_lower or "água de poço" in title_lower:
+            return class_map.get("Análise de Água de Poço de Monitoramento")
+        elif "emissões" in title_lower or "atmosféricas" in title_lower:
+            return class_map.get("Laudo de Emissões Atmosféricas")
+        elif "resíduos sólidos" in title_lower or "geração de resíduos" in title_lower:
+            return class_map.get("Relatório de Geração de Resíduos Sólidos")
+        elif "ruído" in title_lower or "sonora" in title_lower:
+            return class_map.get("Monitoramento de Ruído Limítrofe")
+        elif "grupo a/b" in title_lower or "coleta de resíduos" in title_lower:
+            return class_map.get("Coleta de Resíduos de Saúde (Grupo A/B)")
+        elif "radioproteção" in title_lower:
+            return class_map.get("Laudo de Radioproteção e Calibração")
+        elif "mopp" in title_lower or "treinamento" in title_lower:
+            return class_map.get("Treinamento MOPP de Motoristas")
+        elif "envelopamento" in title_lower or "ficha de emergência" in title_lower:
+            return class_map.get("Ficha de Emergência e Envelopamento")
+        elif "emergências" in title_lower or "pae" in title_lower:
+            return class_map.get("Plano de Atendimento a Emergências (PAE)")
+        elif "bmpo" in title_lower or "psicotrópicos" in title_lower:
+            return class_map.get("Envio de BMPO (Psicotrópicos)")
+        elif "boas práticas" in title_lower or "pop" in title_lower:
+            return class_map.get("Revisão de Manual de Boas Práticas e POPs")
         return None
 
     # 3. Cria Templates de Documentos por Segmento

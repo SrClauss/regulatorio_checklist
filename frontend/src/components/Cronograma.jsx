@@ -16,7 +16,8 @@ import {
   Archive,
   Search,
   SlidersHorizontal,
-  TrendingUp
+  TrendingUp,
+  ChevronDown
 } from 'lucide-react';
 
 export default function Cronograma({ user, onViewTask, onViewDocument, onNavigateTab }) {
@@ -31,9 +32,17 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   const [classeServicos, setClasseServicos] = useState([]);
   const [prestadores, setPrestadores] = useState([]);
 
-  // Filtros Globais do Cronograma
   const [showOnlyServiceClass, setShowOnlyServiceClass] = useState(false);
   const [selectedClasseServicoId, setSelectedClasseServicoId] = useState(null);
+  const [selectedCompanyId, setSelectedCompanyId] = useState('');
+  const [collapsedMonths, setCollapsedMonths] = useState({});
+
+  const toggleMonthCollapse = (monthKey) => {
+    setCollapsedMonths(prev => ({
+      ...prev,
+      [monthKey]: !prev[monthKey]
+    }));
+  };
 
   // Estado de Busca e Filtro da Aba Lista Analítica
   const [searchTerm, setSearchTerm] = useState('');
@@ -292,10 +301,13 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
     }
   };
 
-  // --- FILTRO DE CLASSE DE SERVIÇO GLOBAL ---
+  // --- FILTROS GLOBAIS DO CRONOGRAMA ---
   const getFilteredTasks = () => {
     return todasTarefas.filter(t => {
       if (selectedClasseServicoId && t.classe_servico_id !== selectedClasseServicoId) {
+        return false;
+      }
+      if (selectedCompanyId && t.empresa_id !== selectedCompanyId) {
         return false;
       }
       return true;
@@ -486,9 +498,27 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
       <div style={wrapperStyle}>
         <div style={styles.timelineControlBar}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+            {/* Filtro de Empresa no Cabeçalho */}
+            {user.role !== 'cliente' && (
+              <div style={styles.filterGroup}>
+                <label style={styles.filterLabel}>Empresa:</label>
+                <select
+                  value={selectedCompanyId || ''}
+                  onChange={(e) => setSelectedCompanyId(e.target.value || '')}
+                  className="glass-input glass-select"
+                  style={styles.headerSelect}
+                >
+                  <option value="">Todas as Empresas</option>
+                  {empresas.map(emp => (
+                    <option key={emp._id} value={emp._id}>{emp.nome_fantasia}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {/* Filtro de Classe de Serviço no Cabeçalho */}
             <div style={styles.filterGroup}>
-              <label style={styles.filterLabel}>Filtrar Classe:</label>
+              <label style={styles.filterLabel}>Classe:</label>
               <select
                 value={selectedClasseServicoId || ''}
                 onChange={(e) => setSelectedClasseServicoId(e.target.value || null)}
@@ -521,13 +551,16 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
               </div>
             </div>
 
-            {selectedClasseServicoId && (
+            {(selectedClasseServicoId || selectedCompanyId) && (
               <button 
                 style={styles.clearFilterHeaderBtn} 
-                onClick={() => setSelectedClasseServicoId(null)}
+                onClick={() => {
+                  setSelectedClasseServicoId(null);
+                  setSelectedCompanyId('');
+                }}
               >
                 <X size={12} />
-                <span>Limpar Filtro</span>
+                <span>Limpar Filtros</span>
               </button>
             )}
           </div>
@@ -574,28 +607,49 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
               const isCurrentMonth = m.month === currentMonth && m.year === currentYear;
               const hasHoveredTask = mTasks.some(t => t._id === hoveredTaskId);
 
+              const isCollapsed = !!collapsedMonths[m.key];
+
               return (
                 <div 
                   key={m.key} 
                   id={isCurrentMonth ? 'current-month-row' : undefined}
                   style={{
                     ...styles.monthRow,
-                    height: '230px',
+                    height: isCollapsed ? '76px' : '230px',
                     background: isCurrentMonth ? 'rgba(37, 99, 235, 0.02)' : 'transparent',
-                    zIndex: hasHoveredTask ? 999 : 1
+                    zIndex: hasHoveredTask ? 999 : 1,
+                    transition: 'height 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                    overflow: 'hidden'
                   }}
                 >
-                  <div style={{
-                    ...styles.monthStickyHeader,
-                    borderLeftColor: isCurrentMonth ? 'var(--primary)' : 'var(--glass-border)'
-                  }}>
-                    <span style={{
-                      ...styles.monthLabelText,
-                      fontWeight: isCurrentMonth ? '700' : '500',
-                      color: isCurrentMonth ? 'var(--primary)' : 'var(--text-main)'
-                    }}>
-                      {m.label}
-                    </span>
+                  <div 
+                    style={{
+                      ...styles.monthStickyHeader,
+                      borderLeftColor: isCurrentMonth ? 'var(--primary)' : 'var(--glass-border)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'center',
+                      userSelect: 'none'
+                    }}
+                    onClick={() => toggleMonthCollapse(m.key)}
+                    title={isCollapsed ? "Clique para expandir o mês" : "Clique para recolher o mês"}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '2px' }}>
+                      {isCollapsed ? (
+                        <ChevronRight size={14} style={{ color: 'var(--text-muted)' }} />
+                      ) : (
+                        <ChevronDown size={14} style={{ color: 'var(--primary)' }} />
+                      )}
+                      <span style={{
+                        ...styles.monthLabelText,
+                        fontWeight: isCurrentMonth ? '700' : '500',
+                        color: isCurrentMonth ? 'var(--primary)' : 'var(--text-main)',
+                        margin: 0
+                      }}>
+                        {m.label}
+                      </span>
+                    </div>
                     <span style={styles.monthTaskCount}>
                       {mTasks.length} {mTasks.length === 1 ? 'tarefa' : 'tarefas'}
                     </span>
@@ -652,93 +706,96 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                               transform: isHovered ? 'scale(1.4)' : 'scale(1)'
                             }}
                             onClick={() => onViewTask && onViewTask(t._id)}
-                             onMouseEnter={() => handleMouseEnterTask(t._id)}
-                             onMouseLeave={handleMouseLeaveTask}
+                            onMouseEnter={() => handleMouseEnterTask(t._id)}
+                            onMouseLeave={handleMouseLeaveTask}
+                            title={isCollapsed ? `${t.titulo} - ${empresaNome} (${new Date(t.data_vencimento).toLocaleDateString('pt-BR')})` : undefined}
                           ></div>
 
-                          <>
-                            <div style={{
-                              ...styles.verticalConnector,
-                              ...(isEven ? styles.connectorEven : styles.connectorOdd),
-                              borderColor: color,
-                              borderLeftWidth: isHovered ? '3px' : '1px',
-                              borderStyle: isHovered ? 'solid' : 'dashed',
-                              opacity: isHovered ? 1 : 0.4
-                            }}></div>
-                            
-                            <div 
-                              className="interactive-card"
-                              style={{
-                                ...styles.timelineCompactCard,
-                                ...(isEven ? styles.cardEven : styles.cardOdd),
-                                ...(isHovered && {
-                                  transform: 'translateX(-50%) scale(1.08)',
-                                  background: '#ffffff',
-                                  zIndex: 1000,
-                                  boxShadow: '0 12px 36px rgba(0, 0, 0, 0.18)'
-                                }),
-                                borderLeftColor: color
-                              }}
-                              onClick={() => onViewTask && onViewTask(t._id)}
-                              onMouseEnter={() => handleMouseEnterTask(t._id)}
-                              onMouseLeave={handleMouseLeaveTask}
-                            >
-                              <div style={styles.cardHeaderMini}>
-                                <span style={{
-                                  ...styles.tagMini,
-                                  ...getTaskStatusBadgeStyle(t)
-                                }}>
-                                  Dia {day}
-                                </span>
-                                <span style={styles.cardCompanyMini} title={empresaNome}>
-                                  {empresaNome}
-                                </span>
-                              </div>
-
-                              <h6 style={styles.cardTitleMini} title={isHovered ? t.titulo : displayTitle}>
-                                {isHovered ? t.titulo : displayTitle}
-                              </h6>
+                          {!isCollapsed && (
+                            <>
+                              <div style={{
+                                ...styles.verticalConnector,
+                                ...(isEven ? styles.connectorEven : styles.connectorOdd),
+                                borderColor: color,
+                                borderLeftWidth: isHovered ? '3px' : '1px',
+                                borderStyle: isHovered ? 'solid' : 'dashed',
+                                opacity: isHovered ? 1 : 0.4
+                              }}></div>
                               
-                              <div style={styles.cardFooterMini}>
-                                <span style={styles.cardValMini}>R$ {t.valor_estimado || 0}</span>
-                                
-                                <div style={{ display: 'flex', gap: '4px' }}>
-                                  {t.status !== 'Concluído' && (
-                                    <button 
-                                      style={{ ...styles.actionMicroBtn, color: 'var(--success)' }} 
-                                      onClick={(e) => { e.stopPropagation(); handleConcludeTask(t._id); }}
-                                      title="Concluir condicionante"
-                                    >
-                                      <CheckCircle2 size={12} />
-                                    </button>
-                                  )}
+                              <div 
+                                className="interactive-card"
+                                style={{
+                                  ...styles.timelineCompactCard,
+                                  ...(isEven ? styles.cardEven : styles.cardOdd),
+                                  ...(isHovered && {
+                                    transform: 'translateX(-50%) scale(1.08)',
+                                    background: '#ffffff',
+                                    zIndex: 1000,
+                                    boxShadow: '0 12px 36px rgba(0, 0, 0, 0.18)'
+                                  }),
+                                  borderLeftColor: color
+                                }}
+                                onClick={() => onViewTask && onViewTask(t._id)}
+                                onMouseEnter={() => handleMouseEnterTask(t._id)}
+                                onMouseLeave={handleMouseLeaveTask}
+                              >
+                                <div style={styles.cardHeaderMini}>
+                                  <span style={{
+                                    ...styles.tagMini,
+                                    ...getTaskStatusBadgeStyle(t)
+                                  }}>
+                                    Dia {day}
+                                  </span>
+                                  <span style={styles.cardCompanyMini} title={empresaNome}>
+                                    {empresaNome}
+                                  </span>
                                 </div>
-                              </div>
 
-                              {isHovered && (
-                                <div style={styles.expandedDetails} className="animate-fade-in">
-                                  <div style={styles.detailDivider}></div>
-                                  <div style={styles.expandedField}>
-                                    <strong>Documento:</strong> {getDocumentoInfo(t.documento_id)}
-                                  </div>
-                                  <div style={styles.expandedField}>
-                                    <strong>Classe:</strong> {csNome}
-                                  </div>
-                                  {getPrestadorNome(t.classe_servico_id) && (
-                                    <div style={styles.expandedField}>
-                                      <strong>Prestador:</strong>{' '}
-                                      <a 
-                                        href={`#/prestadores/${getPrestadorId(t.classe_servico_id)}`} 
-                                        style={{ color: 'var(--primary)', textDecoration: 'underline' }}
+                                <h6 style={styles.cardTitleMini} title={isHovered ? t.titulo : displayTitle}>
+                                  {isHovered ? t.titulo : displayTitle}
+                                </h6>
+                                
+                                <div style={styles.cardFooterMini}>
+                                  <span style={styles.cardValMini}>R$ {t.valor_estimado || 0}</span>
+                                  
+                                  <div style={{ display: 'flex', gap: '4px' }}>
+                                    {t.status !== 'Concluído' && (
+                                      <button 
+                                        style={{ ...styles.actionMicroBtn, color: 'var(--success)' }} 
+                                        onClick={(e) => { e.stopPropagation(); handleConcludeTask(t._id); }}
+                                        title="Concluir condicionante"
                                       >
-                                        {getPrestadorNome(t.classe_servico_id)}
-                                      </a>
-                                    </div>
-                                  )}
+                                        <CheckCircle2 size={12} />
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
-                              )}
-                            </div>
-                          </>
+
+                                {isHovered && (
+                                  <div style={styles.expandedDetails} className="animate-fade-in">
+                                    <div style={styles.detailDivider}></div>
+                                    <div style={styles.expandedField}>
+                                      <strong>Documento:</strong> {getDocumentoInfo(t.documento_id)}
+                                    </div>
+                                    <div style={styles.expandedField}>
+                                      <strong>Classe:</strong> {csNome}
+                                    </div>
+                                    {getPrestadorNome(t.classe_servico_id) && (
+                                      <div style={styles.expandedField}>
+                                        <strong>Prestador:</strong>{' '}
+                                        <a 
+                                          href={`#/prestadores/${getPrestadorId(t.classe_servico_id)}`} 
+                                          style={{ color: 'var(--primary)', textDecoration: 'underline' }}
+                                        >
+                                          {getPrestadorNome(t.classe_servico_id)}
+                                        </a>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </>
+                          )}
                         </div>
                       );
                     })}
