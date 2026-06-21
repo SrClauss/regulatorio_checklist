@@ -193,6 +193,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   }, [selectedCompanyId, selectedClasseServicoId, monthsStartOffset, monthsEndOffset]);
 
   const handleScroll = (e) => {
+    if (loadingTasks) return;
     const container = e.currentTarget;
     if (!container) return;
 
@@ -209,6 +210,31 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
       lastScrollTopRef.current = scrollTop;
       shouldCompensateScrollRef.current = true;
       setMonthsStartOffset(prev => prev + 1);
+    }
+  };
+
+  const handleWheel = (e) => {
+    if (loadingTasks) return;
+    const container = e.currentTarget;
+    if (!container) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = container;
+
+    if (e.deltaY > 0) {
+      // Roda para baixo: incrementa meses futuros
+      if (scrollHeight - scrollTop - clientHeight < 150 || scrollHeight <= clientHeight) {
+        setMonthsEndOffset(prev => prev + 1);
+      }
+    } else if (e.deltaY < 0) {
+      // Roda para cima: incrementa meses passados
+      if (scrollTop < 80 || scrollHeight <= clientHeight) {
+        if (!shouldCompensateScrollRef.current) {
+          lastScrollHeightRef.current = scrollHeight;
+          lastScrollTopRef.current = scrollTop;
+          shouldCompensateScrollRef.current = true;
+          setMonthsStartOffset(prev => prev + 1);
+        }
+      }
     }
   };
 
@@ -705,6 +731,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
             onMouseUp={handleMouseUpOrLeave}
             onMouseLeave={handleMouseUpOrLeave}
             onScroll={handleScroll}
+            onWheel={handleWheel}
           >
           <div style={styles.timelineGrid}>
             <div style={styles.rulerRow}>
@@ -767,6 +794,23 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                 )}
               </div>
             </div>
+
+            {/* Botão de Histórico Anterior */}
+            {!zoomedMonth && (
+              <div 
+                style={styles.loadMoreBar} 
+                onClick={() => {
+                  if (containerRef.current) {
+                    lastScrollHeightRef.current = containerRef.current.scrollHeight;
+                    lastScrollTopRef.current = containerRef.current.scrollTop;
+                  }
+                  shouldCompensateScrollRef.current = true;
+                  setMonthsStartOffset(prev => prev + 1);
+                }}
+              >
+                <span>↑ Carregar meses anteriores (Histórico) ↑</span>
+              </div>
+            )}
 
             {months.map((m) => {
               const isZoomed = zoomedMonth && zoomedMonth.key === m.key;
@@ -1210,6 +1254,16 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                 </div>
               );
             })}
+            
+            {/* Botão de Meses Futuros */}
+            {!zoomedMonth && (
+              <div 
+                style={styles.loadMoreBar} 
+                onClick={() => setMonthsEndOffset(prev => prev + 1)}
+              >
+                <span>↓ Carregar meses futuros ↓</span>
+              </div>
+            )}
           </div>
         </div>
         )}
@@ -2681,5 +2735,24 @@ const styles = {
     border: '2px solid rgba(37, 99, 235, 0.1)',
     borderTopColor: 'var(--primary)',
     borderRadius: '50%',
+  },
+  loadMoreBar: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '42px',
+    background: 'rgba(255, 255, 255, 0.4)',
+    borderBottom: '1px dashed var(--glass-border)',
+    borderTop: '1px dashed var(--glass-border)',
+    fontSize: '0.8rem',
+    fontWeight: '600',
+    color: 'var(--primary)',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    userSelect: 'none',
+    textAlign: 'center',
+    width: '100%',
+    margin: '10px 0',
+    borderRadius: '10px',
   },
 };
