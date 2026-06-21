@@ -1250,6 +1250,29 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                         </div>
                       );
                     })}
+
+                    {mTasks.length === 0 && (
+                      <div 
+                        style={styles.emptyTrackLoadButton}
+                        onClick={() => {
+                          const now = new Date();
+                          const thisMonthDate = new Date(m.year, m.month, 1);
+                          if (thisMonthDate < new Date(now.getFullYear(), now.getMonth(), 1)) {
+                            if (containerRef.current) {
+                              lastScrollHeightRef.current = containerRef.current.scrollHeight;
+                              lastScrollTopRef.current = containerRef.current.scrollTop;
+                            }
+                            shouldCompensateScrollRef.current = true;
+                            setMonthsStartOffset(prev => prev + 1);
+                          } else {
+                            setMonthsEndOffset(prev => prev + 1);
+                          }
+                        }}
+                        className="card-hover"
+                      >
+                        <span style={styles.emptyTrackText}>Sem tarefas neste mês. Clique para carregar mais dados.</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -2754,5 +2777,29 @@ const styles = {
     width: '100%',
     margin: '10px 0',
     borderRadius: '10px',
+  },
+  emptyTrackLoadButton: {
+    position: 'absolute',
+    left: '10%',
+    right: '10%',
+    top: '30px',
+    bottom: '30px',
+    background: 'rgba(255, 255, 255, 0.45)',
+    backdropFilter: 'blur(4px)',
+    border: '1px dashed var(--glass-border)',
+    borderRadius: '12px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    zIndex: 10,
+    boxShadow: 'var(--shadow-sm)',
+  },
+  emptyTrackText: {
+    fontSize: '0.8rem',
+    fontWeight: '600',
+    color: 'var(--primary)',
+    textAlign: 'center',
   },
 };
