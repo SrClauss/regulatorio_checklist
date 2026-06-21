@@ -220,34 +220,38 @@ async def run_seed():
         print(f"-> Template cadastrado: {t.nome_documento} ({t.segmento})")
         
     # 4. Lista de 21 Empresas para Gerar
-    empresas_dados = [
-        {"razao": "Alpha Alimentos LTDA", "fantasia": "Alpha Foods", "cnpj": "11.222.333/0001-01", "cidade": "São Paulo", "uf": "SP", "seg": "Alimentos"},
-        {"razao": "Restaurante Sabor & Arte Ltda", "fantasia": "Sabor & Arte", "cnpj": "12.345.678/0001-02", "cidade": "Campinas", "uf": "SP", "seg": "Alimentos"},
-        {"razao": "Panificadora Pão de Ouro Ltda", "fantasia": "Pão de Ouro", "cnpj": "23.456.789/0001-03", "cidade": "São Bernardo", "uf": "SP", "seg": "Alimentos"},
-        {"razao": "Supermercado Bom Preço S.A.", "fantasia": "Bom Preço Super", "cnpj": "34.567.890/0001-04", "cidade": "Santos", "uf": "SP", "seg": "Alimentos"},
-        {"razao": "Distribuidora Frutos do Mar Ltda", "fantasia": "Frutos do Mar", "cnpj": "45.678.901/0001-05", "cidade": "Guarujá", "uf": "SP", "seg": "Alimentos"},
-        
-        {"razao": "Drogaria Nova Esperança Ltda", "fantasia": "Drogaria Esperança", "cnpj": "56.789.012/0001-06", "cidade": "Ribeirão Preto", "uf": "SP", "seg": "Farmácia"},
-        {"razao": "Farmácia Vida e Saúde Ltda", "fantasia": "Farma Vida", "cnpj": "67.890.123/0001-07", "cidade": "Sorocaba", "uf": "SP", "seg": "Farmácia"},
-        {"razao": "FarmaPlus Medicamentos S.A.", "fantasia": "FarmaPlus", "cnpj": "78.901.234/0001-08", "cidade": "São José dos Campos", "uf": "SP", "seg": "Farmácia"},
-        {"razao": "Drogaria Medicar Eireli", "fantasia": "Medicar Drogarias", "cnpj": "89.012.345/0001-09", "cidade": "Jundiaí", "uf": "SP", "seg": "Farmácia"},
-        
-        {"razao": "Auto Posto Shell Trevo Ltda", "fantasia": "Posto Trevo", "cnpj": "90.123.456/0001-10", "cidade": "Limeira", "uf": "SP", "seg": "Posto de Combustíveis"},
-        {"razao": "Posto Petrobras Centro Ltda", "fantasia": "Posto Central", "cnpj": "01.234.567/0001-11", "cidade": "Piracicaba", "uf": "SP", "seg": "Posto de Combustíveis"},
-        {"razao": "Posto Ipiranga Norte S.A.", "fantasia": "Posto Norte", "cnpj": "02.345.678/0001-12", "cidade": "Araraquara", "uf": "SP", "seg": "Posto de Combustíveis"},
-        {"razao": "Auto Posto Petrobrás Rodovia Ltda", "fantasia": "Posto da Rodovia", "cnpj": "03.456.789/0001-13", "cidade": "São Carlos", "uf": "SP", "seg": "Posto de Combustíveis"},
-        
-        {"razao": "Indústria Química Solvax Ltda", "fantasia": "Química Solvax", "cnpj": "04.567.890/0001-14", "cidade": "Diadema", "uf": "SP", "seg": "Indústria"},
-        {"razao": "Plásticos União S.A.", "fantasia": "Plásticos União", "cnpj": "05.678.901/0001-15", "cidade": "Mauá", "uf": "SP", "seg": "Indústria"},
-        {"razao": "Metalúrgica Tubox Ltda", "fantasia": "Metalúrgica Tubox", "cnpj": "06.789.012/0001-16", "cidade": "Guarulhos", "uf": "SP", "seg": "Indústria"},
-        
-        {"razao": "Clínica Médica MedVida Ltda", "fantasia": "MedVida", "cnpj": "07.890.123/0001-17", "cidade": "Osasco", "uf": "SP", "seg": "Saúde"},
-        {"razao": "Laboratório Bioclin S.A.", "fantasia": "Laboratório Bioclin", "cnpj": "08.901.234/0001-18", "cidade": "Barueri", "uf": "SP", "seg": "Saúde"},
-        {"razao": "Hospital Santa Casa Misericórdia", "fantasia": "Santa Casa", "cnpj": "09.901.234/0001-19", "cidade": "Mogi das Cruzes", "uf": "SP", "seg": "Saúde"},
-        
-        {"razao": "Transportadora Rápido SP Ltda", "fantasia": "Rápido SP Trans", "cnpj": "10.012.345/0001-20", "cidade": "São Paulo", "uf": "SP", "seg": "Transporte"},
-        {"razao": "TransQuímica Transportes Especiais", "fantasia": "TransQuímica", "cnpj": "11.123.456/0001-21", "cidade": "Paulínia", "uf": "SP", "seg": "Transporte"},
+    # 4. Geração programática de 200 Empresas para teste de carga
+    bairros = ["Centro", "Jardins", "Pinheiros", "Vila Olímpia", "Berrini", "Alphaville", "Barra da Tijuca", "Leblon", "Boa Viagem", "Savassi", "Batel", "Moinhos de Vento"]
+    segmentos_lista = ["Alimentos", "Farmácia", "Posto de Combustíveis", "Indústria", "Saúde", "Transporte"]
+    cidades_lista = [
+        ("São Paulo", "SP"), ("Campinas", "SP"), ("Santos", "SP"), ("Rio de Janeiro", "RJ"),
+        ("Belo Horizonte", "MG"), ("Curitiba", "PR"), ("Porto Alegre", "RS"), ("Salvador", "BA"),
+        ("Recife", "PE"), ("Fortaleza", "CE"), ("Brasília", "DF"), ("Goiânia", "GO")
     ]
+    
+    empresas_dados = []
+    # Sempre insere Alpha Foods como o primeiro da lista para manter compatibilidade com testes e logins salvos
+    empresas_dados.append({"razao": "Alpha Alimentos LTDA", "fantasia": "Alpha Foods", "cnpj": "11.222.333/0001-01", "cidade": "São Paulo", "uf": "SP", "seg": "Alimentos"})
+
+    for i in range(1, 200):
+        seg = segmentos_lista[i % len(segmentos_lista)]
+        cidade, uf = cidades_lista[i % len(cidades_lista)]
+        bairro = bairros[i % len(bairros)]
+        
+        cnpj_digits = f"{10+i:02d}{(i*7)%900+100:03d}{(i*13)%900+100:03d}0001{(i*17)%90+10:02d}"
+        cnpj_formatted = f"{cnpj_digits[0:2]}.{cnpj_digits[2:5]}.{cnpj_digits[5:8]}/{cnpj_digits[8:12]}-{cnpj_digits[12:14]}"
+        
+        razao = f"Empresa {seg} {bairro} {i} LTDA"
+        fantasia = f"Cliente {seg} {i}"
+        
+        empresas_dados.append({
+            "razao": razao,
+            "fantasia": fantasia,
+            "cnpj": cnpj_formatted,
+            "cidade": cidade,
+            "uf": uf,
+            "seg": seg
+        })
     
     default_client_pw = get_password_hash("cliente123")
     hoje = datetime.utcnow()
@@ -255,7 +259,7 @@ async def run_seed():
     total_tarefas = 0
     total_docs = 0
     
-    print("\nProcessando cadastro das 21 empresas com distribuição realista de prazos...")
+    print("\nProcessando cadastro das 200 empresas com distribuição realista de prazos (histórico de 2 anos)...")
     
     for idx, emp in enumerate(empresas_dados):
         # 1. Cria Empresa
@@ -289,16 +293,18 @@ async def run_seed():
         cliente_res = await db.usuarios.insert_one(cliente_db.model_dump(by_alias=True, exclude={"id"}))
         cliente_id = cliente_res.inserted_id
         
-        # 3. Distribuição de Prazos baseada no índice da empresa
-        # Distribui o dia de vencimento/emissão entre 2 e 28
+        # 3. Distribuição de Prazos baseada no índice da empresa (com até 2 anos de retroatividade)
         dia_emissao = (idx * 4) % 26 + 2
-        # Distribui a retroatividade de emissão (entre 1 e 18 meses atrás)
-        meses_retroativos = (idx * 5) % 18
+        meses_retroativos = (idx * 5) % 24 + 1
         
         # Calcula data de emissão retroativa distribuída
-        ano_emissao = hoje.year - (1 if meses_retroativos >= hoje.month else 0)
-        mes_emissao = (hoje.month - meses_retroativos - 1) % 12 + 1
-        data_emissao_emp = datetime(ano_emissao, mes_emissao, dia_emissao)
+        data_emissao_emp = add_months(hoje, -meses_retroativos)
+        # Ajusta o dia para evitar estouros
+        max_dias_mes = [31,
+            29 if data_emissao_emp.year % 4 == 0 and (data_emissao_emp.year % 100 != 0 or data_emissao_emp.year % 400 == 0) else 28,
+            31, 30, 31, 30, 31, 31, 30, 31, 30, 31][data_emissao_emp.month-1]
+        dia_emissao = min(dia_emissao, max_dias_mes)
+        data_emissao_emp = data_emissao_emp.replace(day=dia_emissao)
         
         segmento = emp["seg"]
         if segmento in templates_dict:

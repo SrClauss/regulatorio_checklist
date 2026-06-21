@@ -366,12 +366,19 @@ export default function CondicionanteDetail({ taskId, user, onBack, onGoToCompan
               {task.classe_servico_id && (
                 <div style={styles.infoField}>
                   <span style={styles.fieldLabel}>Prestador Designado</span>
-                  <span style={{ ...styles.fieldValue, color: 'var(--primary)', fontWeight: '600' }}>
+                  <span style={{ ...styles.fieldValue, fontWeight: '600' }}>
                     {(() => {
                       const csObj = classeServicos.find(cs => cs._id === task.classe_servico_id);
                       if (csObj && csObj.prestador_id) {
                         const provObj = prestadores.find(p => p._id === csObj.prestador_id);
-                        return provObj ? provObj.nome : 'Sem prestador cadastrado';
+                        return provObj ? (
+                          <a 
+                            href={`#/prestadores/${provObj._id}`} 
+                            style={{ color: 'var(--primary)', textDecoration: 'underline' }}
+                          >
+                            {provObj.nome}
+                          </a>
+                        ) : 'Sem prestador cadastrado';
                       }
                       return 'Sem prestador associado a esta classe';
                     })()}

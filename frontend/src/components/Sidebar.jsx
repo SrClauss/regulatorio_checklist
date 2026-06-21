@@ -10,7 +10,8 @@ import {
   User,
   WifiOff,
   Building,
-  BarChart3
+  BarChart3,
+  Briefcase
 } from 'lucide-react';
 
 export default function Sidebar({ user, activeTab, setActiveTab, onLogout, isOnline }) {
@@ -21,6 +22,7 @@ export default function Sidebar({ user, activeTab, setActiveTab, onLogout, isOnl
     // Substituindo o calendário direto pelo Cronograma Operacional na navegação principal
     { id: 'cronograma', label: 'Cronograma', shortLabel: 'Cronograma', icon: Calendar, roles: ['admin', 'consultor', 'cliente'] },
     { id: 'relatorios', label: 'Relatórios', shortLabel: 'Relatórios', icon: BarChart3, roles: ['admin', 'consultor', 'cliente'] },
+    { id: 'prestadores', label: 'Prestadores de Serviço', shortLabel: 'Prestadores', icon: Briefcase, roles: ['admin', 'consultor', 'cliente'] },
     { id: 'cadastros', label: 'Cadastros & Painel', shortLabel: 'Cadastros', icon: Settings, roles: ['admin'] },
   ];
 

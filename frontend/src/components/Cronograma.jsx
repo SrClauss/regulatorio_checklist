@@ -164,6 +164,12 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
     return pr ? pr.nome : null;
   };
 
+  const getPrestadorId = (classeServicoId) => {
+    if (!classeServicoId) return null;
+    const cs = classeServicos.find(c => c._id === classeServicoId);
+    return cs ? cs.prestador_id : null;
+  };
+
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
     return new Date(dateStr).toLocaleDateString('pt-BR');
@@ -388,7 +394,13 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                         </div>
                         {getPrestadorNome(t.classe_servico_id) && (
                           <div style={styles.expandedField}>
-                            <strong>Prestador:</strong> {getPrestadorNome(t.classe_servico_id)}
+                            <strong>Prestador:</strong>{' '}
+                            <a 
+                              href={`#/prestadores/${getPrestadorId(t.classe_servico_id)}`} 
+                              style={{ color: 'var(--primary)', textDecoration: 'underline' }}
+                            >
+                              {getPrestadorNome(t.classe_servico_id)}
+                            </a>
                           </div>
                         )}
                       </div>
@@ -691,7 +703,13 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                                   </div>
                                   {getPrestadorNome(t.classe_servico_id) && (
                                     <div style={styles.expandedField}>
-                                      <strong>Prestador:</strong> {getPrestadorNome(t.classe_servico_id)}
+                                      <strong>Prestador:</strong>{' '}
+                                      <a 
+                                        href={`#/prestadores/${getPrestadorId(t.classe_servico_id)}`} 
+                                        style={{ color: 'var(--primary)', textDecoration: 'underline' }}
+                                      >
+                                        {getPrestadorNome(t.classe_servico_id)}
+                                      </a>
                                     </div>
                                   )}
                                 </div>

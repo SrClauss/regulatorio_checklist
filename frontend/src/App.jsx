@@ -12,6 +12,7 @@ import Relatorios from './components/Relatorios';
 import EmpresaDetail from './components/EmpresaDetail';
 import DocumentoDetail from './components/DocumentoDetail';
 import CondicionanteDetail from './components/CondicionanteDetail';
+import Prestadores from './components/Prestadores';
 import { registerPushNotifications } from './utils/pushSubscription';
 
 function App() {
@@ -22,6 +23,7 @@ function App() {
   const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [selectedCompanyId, setSelectedCompanyId] = useState(null);
   const [selectedDocumentId, setSelectedDocumentId] = useState(null);
+  const [selectedProviderId, setSelectedProviderId] = useState(null);
 
   // Analisa o hash da URL e sincroniza os estados correspondentes
   const parseHash = (currentUser) => {
@@ -43,9 +45,13 @@ function App() {
       const id = hash.replace('#/condicionantes/', '');
       setSelectedTaskId(id);
       setActiveTab('condicionante-detail');
+    } else if (hash.startsWith('#/prestadores/')) {
+      const id = hash.replace('#/prestadores/', '');
+      setSelectedProviderId(id);
+      setActiveTab('prestadores');
     } else {
       const tab = hash.replace('#/', '');
-      const validTabs = ['dashboard', 'empresas', 'documentos', 'cronograma', 'relatorios', 'cadastros', 'calendario'];
+      const validTabs = ['dashboard', 'empresas', 'documentos', 'cronograma', 'relatorios', 'cadastros', 'calendario', 'prestadores'];
       if (validTabs.includes(tab)) {
         setActiveTab(tab);
       } else {
@@ -54,6 +60,7 @@ function App() {
       setSelectedTaskId(null);
       setSelectedCompanyId(null);
       setSelectedDocumentId(null);
+      setSelectedProviderId(null);
     }
   };
 
@@ -127,6 +134,7 @@ function App() {
     setSelectedTaskId(null);
     setSelectedCompanyId(null);
     setSelectedDocumentId(null);
+    setSelectedProviderId(null);
     window.location.hash = '';
   };
 
@@ -196,6 +204,13 @@ function App() {
         return <Relatorios user={user} />;
       case 'cadastros':
         return <Cadastros user={user} />;
+      case 'prestadores':
+        return (
+          <Prestadores 
+            user={user} 
+            selectedProviderId={selectedProviderId} 
+          />
+        );
       case 'empresa-detail':
         return (
           <EmpresaDetail 
