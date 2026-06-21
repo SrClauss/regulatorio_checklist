@@ -4,7 +4,11 @@ import {
   TrendingUp, 
   DollarSign, 
   Bell,
-  CalendarDays
+  CalendarDays,
+  Award,
+  CheckSquare,
+  Users,
+  CheckCircle2
 } from 'lucide-react';
 
 export default function Dashboard({ user, onNavigateTab }) {
@@ -12,6 +16,9 @@ export default function Dashboard({ user, onNavigateTab }) {
   const [anualData, setAnualData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tarefasCount, setTarefasCount] = useState(0);
+  const [tarefasMesCount, setTarefasMesCount] = useState(0);
+  const [topClasseServico, setTopClasseServico] = useState({ nome: 'Nenhuma', count: 0 });
+  const [complianceRate, setComplianceRate] = useState(100);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -20,16 +27,72 @@ export default function Dashboard({ user, onNavigateTab }) {
         const mes = now.getMonth() + 1;
         const ano = now.getFullYear();
 
-        // Carrega dados de faturamento (Admins/Consultores)
+        // Carrega dados agregados em paralelo
+        const [prevMensal, prevAnual, tarefas, csList] = await Promise.all([
+          (user.role === 'admin' || user.role === 'consultor') 
+            ? api.getPrevisibilidadeMensal(mes, ano) 
+            : Promise.resolve({ faturamento_total: 0, faturamento_renovacoes: 0, faturamento_condicionantes: 0 }),
+          (user.role === 'admin' || user.role === 'consultor') 
+            ? api.getPrevisibilidadeAnual(ano) 
+            : Promise.resolve({ consolidado_mensal: [] }),
+          api.listTarefas(),
+          api.listClasseServicos()
+        ]);
+
         if (user.role === 'admin' || user.role === 'consultor') {
-          const prevMensal = await api.getPrevisibilidadeMensal(mes, ano);
           setFaturamentoMensal(prevMensal);
-          const prevAnual = await api.getPrevisibilidadeAnual(ano);
           setAnualData(prevAnual.consolidado_mensal || []);
         }
 
-        const tarefas = await api.listTarefas({ status: 'Pendente' });
-        setTarefasCount(tarefas.length);
+        // 1. Total de tarefas pendentes gerais (sistema)
+        const pendentesGeral = tarefas.filter(t => t.status === 'Pendente');
+        setTarefasCount(pendentesGeral.length);
+
+        // 2. Tarefas do mês atual
+        const currentMonthIndex = now.getMonth(); // 0-11
+        const currentYear = now.getFullYear();
+
+        const tarefasMes = tarefas.filter(t => {
+          if (!t.data_vencimento) return false;
+          const d = new Date(t.data_vencimento);
+          return d.getMonth() === currentMonthIndex && d.getFullYear() === currentYear;
+        });
+        setTarefasMesCount(tarefasMes.length);
+
+        // 3. Taxa de Conformidade do Mês (Concluídas / Total do Mês)
+        if (tarefasMes.length > 0) {
+          const concluidasMes = tarefasMes.filter(t => t.status === 'Concluído').length;
+          const rate = Math.round((concluidasMes / tarefasMes.length) * 100);
+          setComplianceRate(rate);
+        } else {
+          setComplianceRate(100);
+        }
+
+        // 4. Classe de Serviço mais frequente no mês (excluindo nulas / sem classe)
+        const classCounts = {};
+        tarefasMes.forEach(t => {
+          if (t.classe_servico_id) {
+            classCounts[t.classe_servico_id] = (classCounts[t.classe_servico_id] || 0) + 1;
+          }
+        });
+
+        let topCSId = null;
+        let topCount = 0;
+        Object.entries(classCounts).forEach(([id, count]) => {
+          if (count > topCount) {
+            topCount = count;
+            topCSId = id;
+          }
+        });
+
+        if (topCSId) {
+          const matched = csList.find(cs => cs._id === topCSId);
+          if (matched) {
+            setTopClasseServico({ nome: matched.nome, count: topCount });
+          }
+        } else {
+          setTopClasseServico({ nome: 'Nenhuma no mês', count: 0 });
+        }
 
       } catch (error) {
         console.error("Erro ao carregar dados do dashboard:", error);
@@ -59,7 +122,7 @@ export default function Dashboard({ user, onNavigateTab }) {
     return (
       <div style={styles.loaderContainer}>
         <div className="animate-spin" style={styles.spinner}></div>
-        <p style={{ marginTop: '1rem', color: 'var(--text-muted)' }}>Carregando faturamento...</p>
+        <p style={{ marginTop: '1rem', color: 'var(--text-muted)' }}>Carregando dados do painel...</p>
       </div>
     );
   }
@@ -70,7 +133,7 @@ export default function Dashboard({ user, onNavigateTab }) {
       <header style={styles.header}>
         <div>
           <h1 style={styles.title}>Olá, {user.nome}!</h1>
-          <p style={styles.subtitle}>Sua visão panorâmica de faturamento e receitas estimadas.</p>
+          <p style={styles.subtitle}>Sua visão panorâmica de faturamento, receitas estimadas e compliance.</p>
         </div>
         <div style={styles.topRightControls}>
           <div style={styles.iconButton} title="Notificações">
@@ -87,41 +150,94 @@ export default function Dashboard({ user, onNavigateTab }) {
         </div>
       </header>
 
-      {/* Conteúdo Financeiro */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem', marginTop: '1rem' }}>
-        <section className="dashboard-card-grid" style={{
-          ...styles.cardGrid,
-          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))'
-        }}>
-          {(user.role === 'admin' || user.role === 'consultor') && (
-            <div className="glass-card" style={styles.card}>
-              <div style={{ ...styles.cardIconBg, background: 'var(--primary-light)' }}>
-                <DollarSign size={24} color="var(--primary)" />
-              </div>
-              <div style={styles.cardContent}>
-                <span style={styles.cardLabel}>Faturamento Esperado (Mês)</span>
-                <h2 style={styles.cardVal}>{formatCurrency(faturamentoMensal.faturamento_total || 0)}</h2>
-                <div style={styles.cardDetails}>
-                  <span style={{ color: 'var(--text-light)', fontSize: '0.8rem' }}>
-                    Custos de Renovação: {formatCurrency(faturamentoMensal.faturamento_renovacoes || 0)}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
-          <div className="glass-card" style={{...styles.card, opacity: 0.7}}>
-            <div style={{ ...styles.cardIconBg, background: 'var(--glass-bg)' }}>
-              <TrendingUp size={24} color="var(--text-muted)" />
+      {/* Grid de Informações Ricas (4 Cards) */}
+      <section style={styles.cardGrid}>
+        {(user.role === 'admin' || user.role === 'consultor') ? (
+          <div className="glass-card" style={styles.card}>
+            <div style={{ ...styles.cardIconBg, background: 'var(--primary-light)' }}>
+              <DollarSign size={24} color="var(--primary)" />
             </div>
             <div style={styles.cardContent}>
-              <span style={styles.cardLabel}>Margem Estimada</span>
-              <h2 style={{...styles.cardVal, color: 'var(--text-muted)'}}>--</h2>
+              <span style={styles.cardLabel}>Faturamento Esperado (Mês)</span>
+              <h2 style={styles.cardVal}>{formatCurrency(faturamentoMensal.faturamento_total || 0)}</h2>
+              <div style={styles.cardDetails}>
+                <span style={{ color: 'var(--text-light)', fontSize: '0.78rem' }}>
+                  Renovações: {formatCurrency(faturamentoMensal.faturamento_renovacoes || 0)}
+                </span>
+              </div>
             </div>
           </div>
-        </section>
+        ) : (
+          <div className="glass-card" style={styles.card}>
+            <div style={{ ...styles.cardIconBg, background: 'var(--primary-light)' }}>
+              <CheckCircle2 size={24} color="var(--primary)" />
+            </div>
+            <div style={styles.cardContent}>
+              <span style={styles.cardLabel}>Seu Escopo de Trabalho</span>
+              <h2 style={styles.cardVal}>Ativo</h2>
+              <div style={styles.cardDetails}>
+                <span style={{ color: 'var(--text-light)', fontSize: '0.78rem' }}>
+                  Acompanhamento ambiental regular.
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
 
+        <div className="glass-card" style={styles.card}>
+          <div style={{ ...styles.cardIconBg, background: 'rgba(59, 130, 246, 0.1)' }}>
+            <CalendarDays size={24} color="#3b82f6" />
+          </div>
+          <div style={styles.cardContent}>
+            <span style={styles.cardLabel}>Obrigações no Mês</span>
+            <h2 style={styles.cardVal}>{tarefasMesCount}</h2>
+            <div style={styles.cardDetails}>
+              <span style={{ color: 'var(--text-light)', fontSize: '0.78rem' }}>
+                Pendentes gerais no sistema: {tarefasCount}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="glass-card" style={styles.card}>
+          <div style={{ ...styles.cardIconBg, background: 'rgba(234, 179, 8, 0.1)' }}>
+            <Award size={24} color="#eab308" />
+          </div>
+          <div style={styles.cardContent}>
+            <span style={styles.cardLabel}>Classe mais Frequente (Mês)</span>
+            <h2 style={{ ...styles.cardVal, fontSize: topClasseServico.nome.length > 18 ? '1.25rem' : '1.5rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '240px' }} title={topClasseServico.nome}>
+              {topClasseServico.nome}
+            </h2>
+            <div style={styles.cardDetails}>
+              <span style={{ color: 'var(--text-light)', fontSize: '0.78rem' }}>
+                Ocorrências: {topClasseServico.count}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="glass-card" style={styles.card}>
+          <div style={{ ...styles.cardIconBg, background: complianceRate >= 80 ? 'var(--success-light)' : 'var(--danger-light)' }}>
+            <TrendingUp size={24} color={complianceRate >= 80 ? 'var(--success)' : 'var(--danger)'} />
+          </div>
+          <div style={styles.cardContent}>
+            <span style={styles.cardLabel}>Taxa de Compliance (Mês)</span>
+            <h2 style={styles.cardVal}>{complianceRate}%</h2>
+            <div style={styles.cardDetails}>
+              <span style={{ color: 'var(--text-light)', fontSize: '0.78rem' }}>
+                Índice de conclusão mensal.
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Conteúdo Gráfico e Bloco de Planejamento TODO */}
+      <div style={styles.dashboardBodyRow}>
+        
+        {/* Gráfico Anual */}
         {(user.role === 'admin' || user.role === 'consultor') && (
-          <div className="glass-panel" style={styles.chartPanel}>
+          <div className="glass-panel" style={{ ...styles.chartPanel, flex: 2 }}>
             <div style={styles.panelHeader}>
               <TrendingUp size={20} color="var(--primary)" />
               <h3 style={styles.panelTitle}>Previsão Financeira Anual ({new Date().getFullYear()})</h3>
@@ -164,6 +280,44 @@ export default function Dashboard({ user, onNavigateTab }) {
             </div>
           </div>
         )}
+
+        {/* Bloco de Planejamento TODO (Amanhã) */}
+        <div className="glass-panel" style={{ ...styles.chartPanel, flex: 1, height: 'auto', minHeight: '380px' }}>
+          <div style={styles.panelHeader}>
+            <CheckSquare size={20} color="var(--primary)" />
+            <h3 style={styles.panelTitle}>Planejamento de Desenvolvimento</h3>
+          </div>
+
+          <div style={styles.todoContainer}>
+            <div style={styles.todoBadge}>Vou Fazer Amanhã</div>
+            <h4 style={styles.todoTitle}>Melhorias no Módulo de Prestadores</h4>
+            
+            <div style={styles.todoList}>
+              <div style={styles.todoItem}>
+                <input type="checkbox" readOnly checked={false} style={styles.todoCheck} />
+                <span style={styles.todoText}>Designação de fornecedores a condicionantes e licenças.</span>
+              </div>
+              <div style={styles.todoItem}>
+                <input type="checkbox" readOnly checked={false} style={styles.todoCheck} />
+                <span style={styles.todoText}>Mapeamento de tarifas de consultoria e custos por prestador.</span>
+              </div>
+              <div style={styles.todoItem}>
+                <input type="checkbox" readOnly checked={false} style={styles.todoCheck} />
+                <span style={styles.todoText}>Painel de performance e cumprimento de prazos dos terceiros.</span>
+              </div>
+              <div style={styles.todoItem}>
+                <input type="checkbox" readOnly checked={false} style={styles.todoCheck} />
+                <span style={styles.todoText}>Filtro por prestadores no cronograma de compliance.</span>
+              </div>
+            </div>
+
+            <div style={styles.todoFooter}>
+              <Users size={14} color="var(--text-light)" />
+              <span>Módulo: <code>frontend/src/components/Prestadores.jsx</code></span>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   );
@@ -223,43 +377,53 @@ const styles = {
   },
   cardGrid: {
     display: 'grid',
-    gap: '1.5rem',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+    gap: '1rem',
+    marginTop: '1rem',
   },
   card: {
     display: 'flex',
     alignItems: 'center',
-    gap: '1.25rem',
-    padding: '1.75rem 1.5rem',
+    gap: '1rem',
+    padding: '1.25rem 1rem',
     textAlign: 'left',
   },
   cardIconBg: {
-    width: '56px',
-    height: '56px',
-    borderRadius: '14px',
+    width: '48px',
+    height: '48px',
+    borderRadius: '12px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   cardContent: {
     display: 'flex',
     flexDirection: 'column',
+    overflow: 'hidden',
   },
   cardLabel: {
-    fontSize: '0.85rem',
-    fontWeight: '600',
+    fontSize: '0.72rem',
+    fontWeight: '700',
     color: 'var(--text-light)',
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
   },
   cardVal: {
-    fontSize: '1.75rem',
+    fontSize: '1.5rem',
     fontWeight: '700',
     color: 'var(--text-main)',
-    margin: '0.25rem 0',
+    margin: '0.15rem 0',
   },
   cardDetails: {
     display: 'flex',
     alignItems: 'center',
+  },
+  dashboardBodyRow: {
+    display: 'flex',
+    gap: '1.5rem',
+    flexWrap: 'wrap',
+    marginTop: '0.5rem',
   },
   chartPanel: {
     padding: '1.75rem',
@@ -375,5 +539,64 @@ const styles = {
     border: '4px solid var(--glass-border)',
     borderTopColor: 'var(--primary)',
     borderRadius: '50%',
+  },
+
+  // TODO Panel Styles
+  todoContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.75rem',
+    height: '100%',
+    justifyContent: 'space-between',
+  },
+  todoBadge: {
+    background: 'var(--primary-light)',
+    color: 'var(--primary)',
+    fontSize: '0.7rem',
+    fontWeight: '700',
+    padding: '0.25rem 0.6rem',
+    borderRadius: '6px',
+    alignSelf: 'flex-start',
+    textTransform: 'uppercase',
+  },
+  todoTitle: {
+    fontSize: '1rem',
+    fontWeight: '700',
+    color: 'var(--text-main)',
+    margin: '4px 0',
+  },
+  todoList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.75rem',
+    flex: 1,
+    marginTop: '0.5rem',
+  },
+  todoItem: {
+    display: 'flex',
+    gap: '0.6rem',
+    alignItems: 'flex-start',
+  },
+  todoCheck: {
+    marginTop: '3px',
+    cursor: 'pointer',
+    width: '14px',
+    height: '14px',
+    accentColor: 'var(--primary)',
+  },
+  todoText: {
+    fontSize: '0.825rem',
+    color: 'var(--text-main)',
+    lineHeight: '1.4',
+    textAlign: 'left',
+  },
+  todoFooter: {
+    borderTop: '1px solid var(--glass-border)',
+    paddingTop: '0.75rem',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    fontSize: '0.72rem',
+    color: 'var(--text-light)',
   },
 };
