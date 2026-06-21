@@ -35,14 +35,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   const [showOnlyServiceClass, setShowOnlyServiceClass] = useState(false);
   const [selectedClasseServicoId, setSelectedClasseServicoId] = useState(null);
   const [selectedCompanyId, setSelectedCompanyId] = useState('');
-  const [collapsedMonths, setCollapsedMonths] = useState({});
-
-  const toggleMonthCollapse = (monthKey) => {
-    setCollapsedMonths(prev => ({
-      ...prev,
-      [monthKey]: !prev[monthKey]
-    }));
-  };
+  const [zoomedMonth, setZoomedMonth] = useState(null); // null ou { month: number, year: number, label: string, key: string }
 
   // Estado de Busca e Filtro da Aba Lista Analítica
   const [searchTerm, setSearchTerm] = useState('');
@@ -171,6 +164,36 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
     } catch (error) {
       console.error("Erro ao concluir condicionante:", error);
       alert("Não foi possível concluir a tarefa.");
+    }
+  };
+
+  const handleMonthClick = (m) => {
+    if (zoomedMonth && zoomedMonth.key === m.key) {
+      setZoomedMonth(null);
+    } else {
+      setZoomedMonth(m);
+    }
+  };
+
+  const getDayXPercent = (day, daysInMonth, isZoomed) => {
+    if (!isZoomed) {
+      return 10 + ((day - 1) / 30) * 80;
+    }
+    
+    // Zoomed: divide into weeks (5 weeks if > 28 days, else 4 weeks)
+    const numWeeks = daysInMonth > 28 ? 5 : 4;
+    const weekWidth = 80 / numWeeks;
+    
+    if (day <= 28) {
+      const weekIdx = Math.floor((day - 1) / 7); // 0 to 3
+      const dayInWeek = (day - 1) % 7; // 0 to 6
+      const percentInWeek = (dayInWeek + 0.5) / 7;
+      return 10 + (weekIdx + percentInWeek) * weekWidth;
+    } else {
+      const daysInWeek5 = daysInMonth - 28;
+      const dayInWeek5 = day - 29; // 0 to 2
+      const percentInWeek = (dayInWeek5 + 0.5) / daysInWeek5;
+      return 10 + (4 + percentInWeek) * weekWidth;
     }
   };
 
@@ -469,17 +492,19 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
 
-    const months = [];
+    const allMonths = [];
     const startDate = new Date(currentYear, currentMonth - 3, 1);
     for (let i = 0; i < 15; i++) {
       const d = new Date(startDate.getFullYear(), startDate.getMonth() + i, 1);
-      months.push({
+      allMonths.push({
         label: d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
         month: d.getMonth(),
         year: d.getFullYear(),
         key: `${d.getFullYear()}-${d.getMonth()}`
       });
     }
+
+    const months = zoomedMonth ? allMonths.filter(m => m.key === zoomedMonth.key) : allMonths;
 
     const tasksToRender = getFilteredTasks();
 
@@ -498,6 +523,16 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
       <div style={wrapperStyle}>
         <div style={styles.timelineControlBar}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+            {zoomedMonth && (
+              <button 
+                onClick={() => setZoomedMonth(null)}
+                style={styles.backToAnnualBtn}
+                title="Voltar para visualização anual"
+              >
+                <ChevronLeft size={16} style={{ marginRight: '4px' }} />
+                <span>Ver Todos os Meses</span>
+              </button>
+            )}
             {/* Filtro de Empresa no Cabeçalho */}
             {user.role !== 'cliente' && (
               <div style={styles.filterGroup}>
@@ -587,13 +622,60 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
           >
           <div style={styles.timelineGrid}>
             <div style={styles.rulerRow}>
-              <div style={styles.rulerMonthPlaceholder}></div>
+              <div style={{
+                ...styles.rulerMonthPlaceholder,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '0 0.75rem',
+              }}>
+                {zoomedMonth ? (
+                  <button 
+                    onClick={() => setZoomedMonth(null)}
+                    style={styles.rulerBackBtn}
+                    title="Voltar para visualização anual"
+                  >
+                    <ChevronLeft size={14} style={{ marginRight: '4px' }} />
+                    <span>Voltar</span>
+                  </button>
+                ) : null}
+              </div>
               <div style={styles.rulerDaysTrack}>
-                {[1, 5, 10, 15, 20, 25, 30].map(day => (
-                  <div key={day} style={{ ...styles.rulerDayMark, left: `${10 + ((day - 1) / 30) * 80}%` }}>
-                    <span>Dia {day}</span>
-                  </div>
-                ))}
+                {zoomedMonth ? (
+                  (() => {
+                    const targetMonth = months[0];
+                    if (!targetMonth) return null;
+                    const daysInMonth = new Date(targetMonth.year, targetMonth.month + 1, 0).getDate();
+                    const numWeeks = daysInMonth > 28 ? 5 : 4;
+                    const weekWidth = 80 / numWeeks;
+                    return Array.from({ length: numWeeks }).map((_, wIdx) => {
+                      const startDay = wIdx * 7 + 1;
+                      let endDay = (wIdx + 1) * 7;
+                      if (endDay > daysInMonth) endDay = daysInMonth;
+                      
+                      const leftPercent = 10 + wIdx * weekWidth;
+                      return (
+                        <div 
+                          key={wIdx} 
+                          style={{ 
+                            ...styles.rulerWeekMark, 
+                            left: `${leftPercent}%`, 
+                            width: `${weekWidth}%`,
+                          }}
+                        >
+                          <span style={styles.weekLabel}>Semana {wIdx + 1}</span>
+                          <span style={styles.weekRange}>Dias {startDay} - {endDay}</span>
+                        </div>
+                      );
+                    });
+                  })()
+                ) : (
+                  [1, 5, 10, 15, 20, 25, 30].map(day => (
+                    <div key={day} style={{ ...styles.rulerDayMark, left: `${10 + ((day - 1) / 30) * 80}%` }}>
+                      <span>Dia {day}</span>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
 
@@ -606,8 +688,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
 
               const isCurrentMonth = m.month === currentMonth && m.year === currentYear;
               const hasHoveredTask = mTasks.some(t => t._id === hoveredTaskId);
-
-              const isCollapsed = !!collapsedMonths[m.key];
+              const isZoomed = zoomedMonth && zoomedMonth.key === m.key;
 
               return (
                 <div 
@@ -615,10 +696,10 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                   id={isCurrentMonth ? 'current-month-row' : undefined}
                   style={{
                     ...styles.monthRow,
-                    height: isCollapsed ? '76px' : '230px',
+                    height: isZoomed ? '380px' : '230px',
                     background: isCurrentMonth ? 'rgba(37, 99, 235, 0.02)' : 'transparent',
                     zIndex: hasHoveredTask ? 999 : 1,
-                    transition: 'height 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                    transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
                     overflow: 'hidden'
                   }}
                 >
@@ -632,14 +713,14 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                       justifyContent: 'center',
                       userSelect: 'none'
                     }}
-                    onClick={() => toggleMonthCollapse(m.key)}
-                    title={isCollapsed ? "Clique para expandir o mês" : "Clique para recolher o mês"}
+                    onClick={() => handleMonthClick(m)}
+                    title={isZoomed ? "Clique para voltar para visão anual" : "Clique para focar neste mês em semanas"}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '2px' }}>
-                      {isCollapsed ? (
-                        <ChevronRight size={14} style={{ color: 'var(--text-muted)' }} />
+                      {isZoomed ? (
+                        <ChevronLeft size={14} style={{ color: 'var(--primary)' }} />
                       ) : (
-                        <ChevronDown size={14} style={{ color: 'var(--primary)' }} />
+                        <ChevronRight size={14} style={{ color: 'var(--text-muted)' }} />
                       )}
                       <span style={{
                         ...styles.monthLabelText,
@@ -658,28 +739,82 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                   <div style={styles.monthTimelineTrack}>
                     <div style={styles.horizontalLine}></div>
 
-                    {Array.from({ length: 30 }).map((_, dIdx) => {
-                      const dayNum = dIdx + 1;
-                      const tickPercent = 10 + (dIdx / 29) * 80;
-                      const isMajor = dayNum === 1 || dayNum % 5 === 0;
-                      return (
-                        <div 
-                          key={dIdx} 
-                          style={{
-                            ...styles.dayTick,
-                            left: `${tickPercent}%`,
-                            height: isMajor ? '12px' : '6px',
-                            opacity: isMajor ? 0.6 : 0.25,
-                            background: isMajor ? 'var(--text-main)' : 'var(--text-light)'
-                          }}
-                        ></div>
-                      );
-                    })}
+                    {isZoomed ? (
+                      (() => {
+                        const daysInMonth = new Date(m.year, m.month + 1, 0).getDate();
+                        const numWeeks = daysInMonth > 28 ? 5 : 4;
+                        const weekWidth = 80 / numWeeks;
+                        return (
+                          <>
+                            {/* Visual grid columns for weeks */}
+                            {Array.from({ length: numWeeks }).map((_, wIdx) => {
+                              const leftPercent = 10 + wIdx * weekWidth;
+                              return (
+                                <div 
+                                  key={`week-bg-${wIdx}`} 
+                                  style={{
+                                    position: 'absolute',
+                                    left: `${leftPercent}%`,
+                                    top: 0,
+                                    bottom: 0,
+                                    width: `${weekWidth}%`,
+                                    background: wIdx % 2 === 0 ? 'rgba(37, 99, 235, 0.015)' : 'transparent',
+                                    zIndex: 1,
+                                    pointerEvents: 'none'
+                                  }}
+                                ></div>
+                              );
+                            })}
+
+                            {/* Separator lines between weeks */}
+                            {Array.from({ length: numWeeks + 1 }).map((_, wIdx) => {
+                              const leftPercent = 10 + wIdx * weekWidth;
+                              return (
+                                <div 
+                                  key={`week-sep-${wIdx}`} 
+                                  style={{
+                                    position: 'absolute',
+                                    left: `${leftPercent}%`,
+                                    top: 0,
+                                    bottom: 0,
+                                    width: '1px',
+                                    borderLeft: wIdx === 0 || wIdx === numWeeks 
+                                      ? '2px solid rgba(37, 99, 235, 0.25)' 
+                                      : '1px dashed rgba(37, 99, 235, 0.15)',
+                                    zIndex: 2,
+                                    pointerEvents: 'none'
+                                  }}
+                                ></div>
+                              );
+                            })}
+                          </>
+                        );
+                      })()
+                    ) : (
+                      Array.from({ length: 30 }).map((_, dIdx) => {
+                        const dayNum = dIdx + 1;
+                        const tickPercent = 10 + (dIdx / 29) * 80;
+                        const isMajor = dayNum === 1 || dayNum % 5 === 0;
+                        return (
+                          <div 
+                            key={dIdx} 
+                            style={{
+                              ...styles.dayTick,
+                              left: `${tickPercent}%`,
+                              height: isMajor ? '12px' : '6px',
+                              opacity: isMajor ? 0.6 : 0.25,
+                              background: isMajor ? 'var(--text-main)' : 'var(--text-light)'
+                            }}
+                          ></div>
+                        );
+                      })
+                    )}
 
                     {mTasks.map((t, tIdx) => {
                       const tDate = new Date(t.data_vencimento);
                       const day = tDate.getDate();
-                      const leftPercent = 10 + ((day - 1) / 30) * 80;
+                      const daysInMonth = new Date(m.year, m.month + 1, 0).getDate();
+                      const leftPercent = getDayXPercent(day, daysInMonth, isZoomed);
                       const isEven = tIdx % 2 === 0;
                       const isHovered = hoveredTaskId === t._id;
 
@@ -688,6 +823,29 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                       const color = getTaskStatusColor(t);
 
                       const displayTitle = showOnlyServiceClass ? csNome : t.titulo;
+
+                      const connectorStyle = isZoomed
+                        ? (isEven 
+                            ? { ...styles.verticalConnector, bottom: '10px', height: '110px' } 
+                            : { ...styles.verticalConnector, top: '10px', height: '110px' })
+                        : (isEven 
+                            ? { ...styles.verticalConnector, ...styles.connectorEven } 
+                            : { ...styles.verticalConnector, ...styles.connectorOdd });
+
+                      const cardStyle = {
+                        ...styles.timelineCompactCard,
+                        ...(isZoomed
+                          ? (isEven ? { top: '-180px' } : { top: '72px' })
+                          : (isEven ? styles.cardEven : styles.cardOdd)
+                        ),
+                        ...(isHovered && {
+                          transform: 'translateX(-50%) scale(1.08)',
+                          background: '#ffffff',
+                          zIndex: 1000,
+                          boxShadow: '0 12px 36px rgba(0, 0, 0, 0.18)'
+                        }),
+                        borderLeftColor: color
+                      };
 
                       return (
                         <div 
@@ -708,94 +866,78 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                             onClick={() => onViewTask && onViewTask(t._id)}
                             onMouseEnter={() => handleMouseEnterTask(t._id)}
                             onMouseLeave={handleMouseLeaveTask}
-                            title={isCollapsed ? `${t.titulo} - ${empresaNome} (${new Date(t.data_vencimento).toLocaleDateString('pt-BR')})` : undefined}
                           ></div>
 
-                          {!isCollapsed && (
-                            <>
-                              <div style={{
-                                ...styles.verticalConnector,
-                                ...(isEven ? styles.connectorEven : styles.connectorOdd),
-                                borderColor: color,
-                                borderLeftWidth: isHovered ? '3px' : '1px',
-                                borderStyle: isHovered ? 'solid' : 'dashed',
-                                opacity: isHovered ? 1 : 0.4
-                              }}></div>
+                          <div style={{
+                            ...connectorStyle,
+                            borderColor: color,
+                            borderLeftWidth: isHovered ? '3px' : '1px',
+                            borderStyle: isHovered ? 'solid' : 'dashed',
+                            opacity: isHovered ? 1 : 0.4
+                          }}></div>
+                          
+                          <div 
+                            className="interactive-card"
+                            style={cardStyle}
+                            onClick={() => onViewTask && onViewTask(t._id)}
+                            onMouseEnter={() => handleMouseEnterTask(t._id)}
+                            onMouseLeave={handleMouseLeaveTask}
+                          >
+                            <div style={styles.cardHeaderMini}>
+                              <span style={{
+                                ...styles.tagMini,
+                                ...getTaskStatusBadgeStyle(t)
+                              }}>
+                                Dia {day}
+                              </span>
+                              <span style={styles.cardCompanyMini} title={empresaNome}>
+                                {empresaNome}
+                              </span>
+                            </div>
+
+                            <h6 style={styles.cardTitleMini} title={isHovered ? t.titulo : displayTitle}>
+                              {isHovered ? t.titulo : displayTitle}
+                            </h6>
+                            
+                            <div style={styles.cardFooterMini}>
+                              <span style={styles.cardValMini}>R$ {t.valor_estimado || 0}</span>
                               
-                              <div 
-                                className="interactive-card"
-                                style={{
-                                  ...styles.timelineCompactCard,
-                                  ...(isEven ? styles.cardEven : styles.cardOdd),
-                                  ...(isHovered && {
-                                    transform: 'translateX(-50%) scale(1.08)',
-                                    background: '#ffffff',
-                                    zIndex: 1000,
-                                    boxShadow: '0 12px 36px rgba(0, 0, 0, 0.18)'
-                                  }),
-                                  borderLeftColor: color
-                                }}
-                                onClick={() => onViewTask && onViewTask(t._id)}
-                                onMouseEnter={() => handleMouseEnterTask(t._id)}
-                                onMouseLeave={handleMouseLeaveTask}
-                              >
-                                <div style={styles.cardHeaderMini}>
-                                  <span style={{
-                                    ...styles.tagMini,
-                                    ...getTaskStatusBadgeStyle(t)
-                                  }}>
-                                    Dia {day}
-                                  </span>
-                                  <span style={styles.cardCompanyMini} title={empresaNome}>
-                                    {empresaNome}
-                                  </span>
-                                </div>
+                              <div style={{ display: 'flex', gap: '4px' }}>
+                                {t.status !== 'Concluído' && (
+                                  <button 
+                                    style={{ ...styles.actionMicroBtn, color: 'var(--success)' }} 
+                                    onClick={(e) => { e.stopPropagation(); handleConcludeTask(t._id); }}
+                                    title="Concluir condicionante"
+                                  >
+                                    <CheckCircle2 size={12} />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
 
-                                <h6 style={styles.cardTitleMini} title={isHovered ? t.titulo : displayTitle}>
-                                  {isHovered ? t.titulo : displayTitle}
-                                </h6>
-                                
-                                <div style={styles.cardFooterMini}>
-                                  <span style={styles.cardValMini}>R$ {t.valor_estimado || 0}</span>
-                                  
-                                  <div style={{ display: 'flex', gap: '4px' }}>
-                                    {t.status !== 'Concluído' && (
-                                      <button 
-                                        style={{ ...styles.actionMicroBtn, color: 'var(--success)' }} 
-                                        onClick={(e) => { e.stopPropagation(); handleConcludeTask(t._id); }}
-                                        title="Concluir condicionante"
-                                      >
-                                        <CheckCircle2 size={12} />
-                                      </button>
-                                    )}
-                                  </div>
+                            {isHovered && (
+                              <div style={styles.expandedDetails} className="animate-fade-in">
+                                <div style={styles.detailDivider}></div>
+                                <div style={styles.expandedField}>
+                                  <strong>Documento:</strong> {getDocumentoInfo(t.documento_id)}
                                 </div>
-
-                                {isHovered && (
-                                  <div style={styles.expandedDetails} className="animate-fade-in">
-                                    <div style={styles.detailDivider}></div>
-                                    <div style={styles.expandedField}>
-                                      <strong>Documento:</strong> {getDocumentoInfo(t.documento_id)}
-                                    </div>
-                                    <div style={styles.expandedField}>
-                                      <strong>Classe:</strong> {csNome}
-                                    </div>
-                                    {getPrestadorNome(t.classe_servico_id) && (
-                                      <div style={styles.expandedField}>
-                                        <strong>Prestador:</strong>{' '}
-                                        <a 
-                                          href={`#/prestadores/${getPrestadorId(t.classe_servico_id)}`} 
-                                          style={{ color: 'var(--primary)', textDecoration: 'underline' }}
-                                        >
-                                          {getPrestadorNome(t.classe_servico_id)}
-                                        </a>
-                                      </div>
-                                    )}
+                                <div style={styles.expandedField}>
+                                  <strong>Classe:</strong> {csNome}
+                                </div>
+                                {getPrestadorNome(t.classe_servico_id) && (
+                                  <div style={styles.expandedField}>
+                                    <strong>Prestador:</strong>{' '}
+                                    <a 
+                                      href={`#/prestadores/${getPrestadorId(t.classe_servico_id)}`} 
+                                      style={{ color: 'var(--primary)', textDecoration: 'underline' }}
+                                    >
+                                      {getPrestadorNome(t.classe_servico_id)}
+                                    </a>
                                   </div>
                                 )}
                               </div>
-                            </>
-                          )}
+                            )}
+                          </div>
                         </div>
                       );
                     })}
@@ -2122,5 +2264,55 @@ const styles = {
     padding: 0,
     display: 'flex',
     alignItems: 'center',
+  },
+  rulerWeekMark: {
+    position: 'absolute',
+    top: '50%',
+    transform: 'translateY(-50%)',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100%',
+  },
+  weekLabel: {
+    fontSize: '0.78rem',
+    fontWeight: '700',
+    color: 'var(--primary)',
+  },
+  weekRange: {
+    fontSize: '0.62rem',
+    color: 'var(--text-light)',
+    marginTop: '2px',
+  },
+  rulerBackBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'rgba(37, 99, 235, 0.08)',
+    border: '1px solid rgba(37, 99, 235, 0.2)',
+    borderRadius: '8px',
+    color: 'var(--primary)',
+    padding: '0.3rem 0.6rem',
+    fontSize: '0.75rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    width: '100%',
+    textAlign: 'center',
+  },
+  backToAnnualBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'rgba(37, 99, 235, 0.08)',
+    border: '1px solid rgba(37, 99, 235, 0.2)',
+    borderRadius: '8px',
+    color: 'var(--primary)',
+    padding: '0.4rem 0.8rem',
+    fontSize: '0.8rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
   },
 };
