@@ -1,6 +1,6 @@
 import os
 import io
-from typing import List, Optional
+from typing import List, Optional, Union, Dict, Any
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from fastapi.responses import StreamingResponse, FileResponse
@@ -30,7 +30,7 @@ async def create_manual_task(task_in: TarefaCreate, current_user: UsuarioDB = De
     task_dict = await db.tarefas.find_one({"_id": result.inserted_id})
     return TarefaResponse(**task_dict)
 
-@router.get("", response_model=List[TarefaResponse])
+@router.get("", response_model=Union[List[TarefaResponse], Dict[str, Any]])
 async def list_tasks(
     empresa_id: Optional[str] = Query(None),
     documento_id: Optional[str] = Query(None),
@@ -39,6 +39,9 @@ async def list_tasks(
     status_filtro: Optional[str] = Query(None, alias="status"),
     data_inicio: Optional[datetime] = Query(None),
     data_fim: Optional[datetime] = Query(None),
+    page: int = Query(1, ge=1),
+    limit: int = Query(2000, ge=1),
+    paginated: bool = Query(False),
     current_user: UsuarioDB = Depends(get_current_active_user)
 ):
     """Lista tarefas aplicando filtros e limites de visualização por nível de acesso (RBAC)."""
@@ -75,9 +78,21 @@ async def list_tasks(
             date_query["$lte"] = data_fim
         query["data_vencimento"] = date_query
         
-    tasks_cursor = db.tarefas.find(query).sort("data_vencimento", 1)
-    tasks = await tasks_cursor.to_list(length=2000)
-    return [TarefaResponse(**t) for t in tasks]
+    if paginated:
+        total = await db.tarefas.count_documents(query)
+        skip = (page - 1) * limit
+        tasks_cursor = db.tarefas.find(query).sort("data_vencimento", 1).skip(skip).limit(limit)
+        tasks = await tasks_cursor.to_list(length=limit)
+        return {
+            "items": [TarefaResponse(**t) for t in tasks],
+            "total": total,
+            "page": page,
+            "limit": limit
+        }
+    else:
+        tasks_cursor = db.tarefas.find(query).sort("data_vencimento", 1)
+        tasks = await tasks_cursor.to_list(length=2000)
+        return [TarefaResponse(**t) for t in tasks]
 
 @router.get("/{tarefa_id}", response_model=TarefaResponse)
 async def get_task_by_id(tarefa_id: str, current_user: UsuarioDB = Depends(get_current_active_user)):

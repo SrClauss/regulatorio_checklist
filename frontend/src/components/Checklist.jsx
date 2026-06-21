@@ -42,6 +42,11 @@ export default function Checklist({
   const [errorMessage, setErrorMessage] = useState('');
   const [textoProvidencia, setTextoProvidencia] = useState('');
   const [notificandoChecklistId, setNotificandoChecklistId] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filtroEmpresa, filtroStatus, filtroPeriodicidade, filtroDocumento]);
 
   useEffect(() => {
     if (initialCompanyId) {
@@ -236,6 +241,18 @@ export default function Checklist({
     }
   };
 
+  const filteredTarefas = tarefas.filter(t => {
+    if (filtroPeriodicidade && t.periodicidade !== filtroPeriodicidade) return false;
+    return true;
+  });
+
+  const itemsPerPage = 50;
+  const totalPages = Math.ceil(filteredTarefas.length / itemsPerPage);
+  const paginatedTasks = filteredTarefas.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
   if (loading && tarefas.length === 0) {
     return (
       <div style={styles.loaderContainer}>
@@ -373,23 +390,14 @@ export default function Checklist({
               </tr>
             </thead>
             <tbody>
-              {(() => {
-                const tarefasExibidas = tarefas.filter(t => {
-                  if (filtroPeriodicidade && t.periodicidade !== filtroPeriodicidade) return false;
-                  return true;
-                });
-
-                if (tarefasExibidas.length === 0) {
-                  return (
-                    <tr>
-                      <td colSpan={user.role === 'cliente' ? "5" : "6"} style={styles.emptyRow}>
-                        Nenhuma tarefa encontrada para esta visualização.
-                      </td>
-                    </tr>
-                  );
-                }
-
-                return tarefasExibidas.map(task => {
+              {paginatedTasks.length === 0 ? (
+                <tr>
+                  <td colSpan={user.role === 'cliente' ? "5" : "6"} style={styles.emptyRow}>
+                    Nenhuma tarefa encontrada para esta visualização.
+                  </td>
+                </tr>
+              ) : (
+                paginatedTasks.map(task => {
                   const isSelected = selectedTask?._id === task._id;
                   return (
                     <tr 
@@ -444,10 +452,43 @@ export default function Checklist({
                       </td>
                     </tr>
                   );
-                });
-              })()}
+                })
+              )}
             </tbody>
           </table>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div style={styles.paginationContainer}>
+              <button 
+                disabled={currentPage === 1} 
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                style={{
+                  ...styles.pageBtn,
+                  opacity: currentPage === 1 ? 0.5 : 1,
+                  cursor: currentPage === 1 ? 'not-allowed' : 'pointer'
+                }}
+                className="glass-btn"
+              >
+                Anterior
+              </button>
+              <span style={styles.pageIndicator}>
+                Página {currentPage} de {totalPages} ({filteredTarefas.length} condicionantes)
+              </span>
+              <button 
+                disabled={currentPage === totalPages} 
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                style={{
+                  ...styles.pageBtn,
+                  opacity: currentPage === totalPages ? 0.5 : 1,
+                  cursor: currentPage === totalPages ? 'not-allowed' : 'pointer'
+                }}
+                className="glass-btn"
+              >
+                Próxima
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Painel Lateral de Rastreabilidade e Auditoria */}
@@ -978,5 +1019,24 @@ const styles = {
     fontWeight: '600',
     borderRadius: '8px',
     cursor: 'pointer',
+  },
+  paginationContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '1rem',
+    marginTop: '1.5rem',
+    width: '100%',
+  },
+  pageBtn: {
+    padding: '0.4rem 0.8rem',
+    fontSize: '0.85rem',
+    fontWeight: '600',
+    borderRadius: '8px',
+  },
+  pageIndicator: {
+    fontSize: '0.85rem',
+    color: 'var(--text-muted)',
+    fontWeight: '550',
   },
 };

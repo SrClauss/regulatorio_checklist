@@ -41,6 +41,11 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   const [searchTerm, setSearchTerm] = useState('');
   const [listCompanyFilter, setListCompanyFilter] = useState('');
   const [listStatusFilter, setListStatusFilter] = useState('');
+  const [listCurrentPage, setListCurrentPage] = useState(1);
+
+  useEffect(() => {
+    setListCurrentPage(1);
+  }, [searchTerm, listCompanyFilter, listStatusFilter]);
 
   // Estados de Hover
   const [hoveredTaskId, setHoveredTaskId] = useState(null);
@@ -1158,6 +1163,9 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
         title: 'Concluídas',
         color: 'var(--success)',
         tasks: tasks.filter(t => t.status === 'Concluído')
+                     .sort((a, b) => new Date(b.data_conclusao || b.data_vencimento) - new Date(a.data_conclusao || a.data_vencimento))
+                     .slice(0, 30),
+        subtitle: 'Últimas 30 concluídas'
       }
     };
 
@@ -1165,9 +1173,18 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
       <div style={styles.kanbanContainer} className="animate-fade-in">
         {Object.entries(columns).map(([key, col]) => (
           <div key={key} className="glass-panel" style={styles.kanbanColumn}>
-            <div style={{ ...styles.kanbanColumnHeader, borderBottom: `3px solid ${col.color}` }}>
-              <h4 style={styles.kanbanColumnTitle}>{col.title}</h4>
-              <span style={styles.kanbanCountPill}>{col.tasks.length}</span>
+            <div style={{ ...styles.kanbanColumnHeader, borderBottom: `3px solid ${col.color}`, flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                <h4 style={styles.kanbanColumnTitle}>{col.title}</h4>
+                <span style={styles.kanbanCountPill}>
+                  {key === 'concluidas' && col.tasks.length === 30 ? '30+' : col.tasks.length}
+                </span>
+              </div>
+              {col.subtitle && (
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-light)', fontStyle: 'italic' }}>
+                  {col.subtitle}
+                </span>
+              )}
             </div>
             
             <div style={styles.kanbanCardsList}>
@@ -1248,6 +1265,13 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
       return matchesSearch && matchesCompany && matchesStatus;
     });
 
+    const itemsPerPage = 50;
+    const totalPages = Math.ceil(tasks.length / itemsPerPage);
+    const paginatedTasks = tasks.slice(
+      (listCurrentPage - 1) * itemsPerPage,
+      listCurrentPage * itemsPerPage
+    );
+
     return (
       <div className="glass-panel animate-fade-in" style={styles.listContainer}>
         {/* Barra de Filtros e Busca */}
@@ -1304,12 +1328,12 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
               </tr>
             </thead>
             <tbody>
-              {tasks.length === 0 ? (
+              {paginatedTasks.length === 0 ? (
                 <tr>
                   <td colSpan="7" style={styles.tdEmpty}>Nenhuma obrigação encontrada com os filtros selecionados.</td>
                 </tr>
               ) : (
-                tasks.map(t => (
+                paginatedTasks.map(t => (
                   <tr key={t._id} style={styles.tableRow} onClick={() => onViewTask(t._id)}>
                     <td style={styles.td}>
                       <span style={{
@@ -1349,6 +1373,39 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
               )}
             </tbody>
           </table>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div style={styles.paginationContainer}>
+              <button 
+                disabled={listCurrentPage === 1} 
+                onClick={() => setListCurrentPage(prev => Math.max(prev - 1, 1))}
+                style={{
+                  ...styles.pageBtn,
+                  opacity: listCurrentPage === 1 ? 0.5 : 1,
+                  cursor: listCurrentPage === 1 ? 'not-allowed' : 'pointer'
+                }}
+                className="glass-btn"
+              >
+                Anterior
+              </button>
+              <span style={styles.pageIndicator}>
+                Página {listCurrentPage} de {totalPages} ({tasks.length} condicionantes)
+              </span>
+              <button 
+                disabled={listCurrentPage === totalPages} 
+                onClick={() => setListCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                style={{
+                  ...styles.pageBtn,
+                  opacity: listCurrentPage === totalPages ? 0.5 : 1,
+                  cursor: listCurrentPage === totalPages ? 'not-allowed' : 'pointer'
+                }}
+                className="glass-btn"
+              >
+                Próxima
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -2493,5 +2550,24 @@ const styles = {
     fontWeight: '600',
     cursor: 'pointer',
     transition: 'all 0.2s ease',
+  },
+  paginationContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '1rem',
+    marginTop: '1.5rem',
+    width: '100%',
+  },
+  pageBtn: {
+    padding: '0.4rem 0.8rem',
+    fontSize: '0.85rem',
+    fontWeight: '600',
+    borderRadius: '8px',
+  },
+  pageIndicator: {
+    fontSize: '0.85rem',
+    color: 'var(--text-muted)',
+    fontWeight: '550',
   },
 };

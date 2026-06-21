@@ -186,6 +186,9 @@ export const api = {
     if (filters.status) params.append('status', filters.status);
     if (filters.data_inicio) params.append('data_inicio', filters.data_inicio);
     if (filters.data_fim) params.append('data_fim', filters.data_fim);
+    if (filters.page) params.append('page', filters.page);
+    if (filters.limit) params.append('limit', filters.limit);
+    if (filters.paginated) params.append('paginated', filters.paginated);
 
     const cacheKey = `cached_tasks_${params.toString()}`;
     try {
