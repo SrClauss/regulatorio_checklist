@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { api } from '../api';
 import { 
   CalendarDays, 
@@ -26,6 +26,15 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   const [todasTarefas, setTodasTarefas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingTasks, setLoadingTasks] = useState(false);
+
+  // Estados de offset dinâmicos para a Linha do Tempo
+  const [monthsStartOffset, setMonthsStartOffset] = useState(1);
+  const [monthsEndOffset, setMonthsEndOffset] = useState(1);
+
+  // Refs de controle de scroll e compensação
+  const lastScrollHeightRef = useRef(0);
+  const lastScrollTopRef = useRef(0);
+  const shouldCompensateScrollRef = useRef(false);
 
   // Entidades auxiliares para mapear IDs para nomes
   const [empresas, setEmpresas] = useState([]);
@@ -115,12 +124,12 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   const animationFrameIdRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  const fetchTasks = async (companyId, csId) => {
+  const fetchTasks = async (companyId, csId, startOffset = monthsStartOffset, endOffset = monthsEndOffset) => {
     try {
       setLoadingTasks(true);
       const now = new Date();
-      const dateStart = new Date(now.getFullYear(), now.getMonth() - 3, 1).toISOString();
-      const dateEnd = new Date(now.getFullYear(), now.getMonth() + 13, 1).toISOString();
+      const dateStart = new Date(now.getFullYear(), now.getMonth() - startOffset, 1).toISOString();
+      const dateEnd = new Date(now.getFullYear(), now.getMonth() + endOffset + 1, 1).toISOString();
       
       const filters = {};
       if (companyId) filters.empresa_id = companyId;
@@ -165,7 +174,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
       setClasseServicos(csList);
       setPrestadores(prList);
       
-      await fetchTasks(selectedCompanyId, selectedClasseServicoId);
+      await fetchTasks(selectedCompanyId, selectedClasseServicoId, monthsStartOffset, monthsEndOffset);
     } catch (error) {
       console.error("Erro ao carregar dados do cronograma completo:", error);
     } finally {
@@ -179,9 +188,39 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
 
   useEffect(() => {
     if (!loading) {
-      fetchTasks(selectedCompanyId, selectedClasseServicoId);
+      fetchTasks(selectedCompanyId, selectedClasseServicoId, monthsStartOffset, monthsEndOffset);
     }
-  }, [selectedCompanyId, selectedClasseServicoId]);
+  }, [selectedCompanyId, selectedClasseServicoId, monthsStartOffset, monthsEndOffset]);
+
+  const handleScroll = (e) => {
+    const container = e.currentTarget;
+    if (!container) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = container;
+
+    // Scroll para baixo: carrega próximos meses
+    if (scrollHeight - scrollTop - clientHeight < 150) {
+      setMonthsEndOffset(prev => prev + 1);
+    }
+
+    // Scroll para cima: carrega meses anteriores
+    if (scrollTop < 80 && !shouldCompensateScrollRef.current) {
+      lastScrollHeightRef.current = scrollHeight;
+      lastScrollTopRef.current = scrollTop;
+      shouldCompensateScrollRef.current = true;
+      setMonthsStartOffset(prev => prev + 1);
+    }
+  };
+
+  useLayoutEffect(() => {
+    if (shouldCompensateScrollRef.current && containerRef.current) {
+      const container = containerRef.current;
+      const newScrollHeight = container.scrollHeight;
+      const diff = newScrollHeight - lastScrollHeightRef.current;
+      container.scrollTop = lastScrollTopRef.current + diff;
+      shouldCompensateScrollRef.current = false;
+    }
+  }, [monthsStartOffset]);
 
   // Centraliza o scroll no mês atual ao entrar na linha do tempo
   useEffect(() => {
@@ -538,8 +577,9 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
     const currentYear = now.getFullYear();
 
     const allMonths = [];
-    const startDate = new Date(currentYear, currentMonth - 3, 1);
-    for (let i = 0; i < 15; i++) {
+    const startDate = new Date(currentYear, currentMonth - monthsStartOffset, 1);
+    const totalMonthsRange = monthsStartOffset + monthsEndOffset + 1;
+    for (let i = 0; i < totalMonthsRange; i++) {
       const d = new Date(startDate.getFullYear(), startDate.getMonth() + i, 1);
       allMonths.push({
         label: d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
@@ -664,6 +704,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUpOrLeave}
             onMouseLeave={handleMouseUpOrLeave}
+            onScroll={handleScroll}
           >
           <div style={styles.timelineGrid}>
             <div style={styles.rulerRow}>
