@@ -321,7 +321,33 @@ export default function Relatorios({ user }) {
   const mFinSaldoProjetado = mFinReceitasTotal - mFinCustosTotal;
 
   const printStyles = `
+    /* Estilos Globais da Tabela (Visão Web) */
+    .report-table th, .report-table td {
+      padding: 1.1rem 1.25rem !important;
+      border-bottom: 1px solid var(--glass-border);
+      vertical-align: middle;
+      line-height: 1.6;
+    }
+    .report-table th {
+      background: rgba(37, 99, 235, 0.04);
+      font-weight: 700;
+      color: var(--text-main);
+      text-transform: uppercase;
+      font-size: 0.8rem;
+      letter-spacing: 0.05em;
+    }
+    .report-table tbody tr:nth-child(even) {
+      background-color: rgba(255, 255, 255, 0.35);
+    }
+    .report-table tbody tr:hover {
+      background-color: rgba(255, 255, 255, 0.65);
+    }
+
     @media print {
+      @page {
+        size: landscape;
+        margin: 1cm;
+      }
       body {
         background: #ffffff !important;
         color: #000000 !important;
@@ -676,7 +702,7 @@ export default function Relatorios({ user }) {
                   <p style={styles.noDataText}>Nenhuma empresa corresponde aos filtros selecionados.</p>
                 ) : (
                   <div className="responsive-table-container">
-                    <table style={styles.table}>
+                    <table className="report-table" style={styles.table}>
                       <thead>
                         <tr>
                           <th>Nome Fantasia</th>
@@ -772,7 +798,7 @@ export default function Relatorios({ user }) {
                   <p style={styles.noDataText}>Nenhum documento encontrado para os filtros selecionados.</p>
                 ) : (
                   <div className="responsive-table-container">
-                    <table style={styles.table}>
+                    <table className="report-table" style={styles.table}>
                       <thead>
                         <tr>
                           <th>Licença / Documento</th>
@@ -888,7 +914,7 @@ export default function Relatorios({ user }) {
                         </div>
 
                         <div className="responsive-table-container">
-                          <table style={styles.table}>
+                          <table className="report-table" style={styles.table}>
                             <thead>
                               <tr>
                                 <th>Condicionante</th>
@@ -928,7 +954,7 @@ export default function Relatorios({ user }) {
                     <div className="glass-panel" style={styles.tablePanel}>
                       <h3 style={styles.tablePanelTitle}>Lista Geral de Condicionantes</h3>
                       <div className="responsive-table-container">
-                        <table style={styles.table}>
+                        <table className="report-table" style={styles.table}>
                           <thead>
                             <tr>
                               <th>Condicionante</th>
@@ -1067,7 +1093,7 @@ export default function Relatorios({ user }) {
                         <p style={styles.noDataText}>Não existem lançamentos financeiros para o período especificado.</p>
                       ) : (
                         <div className="responsive-table-container">
-                          <table style={styles.table}>
+                          <table className="report-table" style={styles.table}>
                             <thead>
                               <tr>
                                 <th>Vencimento</th>
