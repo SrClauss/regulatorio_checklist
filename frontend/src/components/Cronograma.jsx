@@ -42,7 +42,6 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   const [classeServicos, setClasseServicos] = useState([]);
   const [prestadores, setPrestadores] = useState([]);
 
-  const [showOnlyServiceClass, setShowOnlyServiceClass] = useState(false);
   const [selectedClasseServicoId, setSelectedClasseServicoId] = useState(null);
   const [selectedCompanyId, setSelectedCompanyId] = useState('');
   const [zoomedMonth, setZoomedMonth] = useState(null); // null ou { month: number, year: number, label: string, key: string }
@@ -517,7 +516,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
               const csNome = getClasseServicoNome(t.classe_servico_id);
               const empresaNome = getEmpresaNome(t.empresa_id);
               const isExpanded = expandedMobileTaskIds.includes(t._id);
-              const displayTitle = showOnlyServiceClass ? csNome : t.titulo;
+              const displayTitle = t.titulo;
               
               return (
                 <div key={t._id} style={styles.verticalTaskRow}>
@@ -692,25 +691,6 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                   <option key={cs._id} value={cs._id}>{cs.nome}</option>
                 ))}
               </select>
-            </div>
-
-            {/* Estrutura de Filtro e Visualização de Títulos vs Classes */}
-            <div style={styles.filterGroup}>
-              <label style={styles.filterLabel}>Exibir por:</label>
-              <div style={styles.toggleButtonGroup}>
-                <button 
-                  style={!showOnlyServiceClass ? styles.activeToggleSubBtn : styles.toggleSubBtn}
-                  onClick={() => setShowOnlyServiceClass(false)}
-                >
-                  Títulos
-                </button>
-                <button 
-                  style={showOnlyServiceClass ? styles.activeToggleSubBtn : styles.toggleSubBtn}
-                  onClick={() => setShowOnlyServiceClass(true)}
-                >
-                  Classes de Serviço
-                </button>
-              </div>
             </div>
 
             {(selectedClasseServicoId || selectedCompanyId) && (
@@ -970,7 +950,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                           const csNome = getClasseServicoNome(t.classe_servico_id);
                           const color = getTaskStatusColor(t);
 
-                          const displayTitle = showOnlyServiceClass ? csNome : t.titulo;
+                          const displayTitle = t.titulo;
 
                           return (
                             <div 
@@ -1159,7 +1139,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                       const csNome = getClasseServicoNome(t.classe_servico_id);
                       const color = getTaskStatusColor(t);
 
-                      const displayTitle = showOnlyServiceClass ? csNome : t.titulo;
+                      const displayTitle = t.titulo;
 
                       return (
                         <div 
@@ -1845,6 +1825,27 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
         </button>
       </div>
 
+      {/* Legenda de Status */}
+      <div style={styles.legendBar}>
+        <span style={styles.legendTitle}>Legenda:</span>
+        <div style={styles.legendItem}>
+          <span style={{ ...styles.legendDot, background: 'var(--success)' }}></span>
+          <span>Concluído</span>
+        </div>
+        <div style={styles.legendItem}>
+          <span style={{ ...styles.legendDot, background: '#eab308' }}></span>
+          <span>Em Andamento / Auditoria</span>
+        </div>
+        <div style={styles.legendItem}>
+          <span style={{ ...styles.legendDot, background: 'var(--primary)' }}></span>
+          <span>Pendente</span>
+        </div>
+        <div style={styles.legendItem}>
+          <span style={{ ...styles.legendDot, background: 'var(--danger)' }}></span>
+          <span>Atrasado</span>
+        </div>
+      </div>
+
       {/* Conteúdo Dinâmico conforme Tab Ativa */}
       <div style={styles.tabContent}>
         {activeTab === 'timeline' && renderTimelineView()}
@@ -1948,6 +1949,37 @@ const styles = {
   },
   tabContent: {
     marginTop: '0.5rem',
+  },
+  legendBar: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '1.25rem',
+    flexWrap: 'wrap',
+    background: 'var(--glass-bg)',
+    border: '1px solid var(--glass-border)',
+    borderRadius: '12px',
+    padding: '0.5rem 1.0rem',
+    marginTop: '-0.5rem',
+  },
+  legendTitle: {
+    fontSize: '0.75rem',
+    fontWeight: '700',
+    color: 'var(--text-muted)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+  },
+  legendItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.4rem',
+    fontSize: '0.8rem',
+    fontWeight: '600',
+    color: 'var(--text-main)',
+  },
+  legendDot: {
+    width: '10px',
+    height: '10px',
+    borderRadius: '50%',
   },
 
   // STYLES: Timeline Stacked
