@@ -2256,7 +2256,8 @@ const styles = {
     bottom: 'auto',
   },
   cardOdd: {
-    top: '52px',
+    bottom: '-115px',
+    top: 'auto',
   },
   cardHeaderMini: {
     display: 'flex',
