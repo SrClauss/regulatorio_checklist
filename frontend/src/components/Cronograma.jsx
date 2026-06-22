@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
 import { api } from '../api';
 import { 
   CalendarDays, 
@@ -450,25 +450,33 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   };
 
   // --- FILTROS GLOBAIS DO CRONOGRAMA ---
-  const getFilteredTasks = () => {
+  const tasksFiltered = useMemo(() => {
     return todasTarefas.filter(t => {
-      if (selectedClasseServicoId && t.classe_servico_id !== selectedClasseServicoId) {
-        return false;
-      }
-      if (selectedCompanyId && t.empresa_id !== selectedCompanyId) {
-        return false;
-      }
+      if (selectedClasseServicoId && t.classe_servico_id !== selectedClasseServicoId) return false;
+      if (selectedCompanyId && t.empresa_id !== selectedCompanyId) return false;
       return true;
     });
+  }, [todasTarefas, selectedClasseServicoId, selectedCompanyId]);
+
+  const tasksByMonthKey = useMemo(() => {
+    const groups = {};
+    tasksFiltered.forEach(t => {
+      if (!t.data_vencimento) return;
+      const d = new Date(t.data_vencimento);
+      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(t);
+    });
+    return groups;
+  }, [tasksFiltered]);
+
+  const getFilteredTasks = () => {
+    return tasksFiltered;
   };
 
   const renderVerticalTimeline = (months, tasksToRender) => {
     const activeMonthKey = selectedMobileMonthKey || `${new Date().getFullYear()}-${new Date().getMonth()}`;
-    const mTasks = tasksToRender.filter(t => {
-      if (!t.data_vencimento) return false;
-      const d = new Date(t.data_vencimento);
-      return `${d.getFullYear()}-${d.getMonth()}` === activeMonthKey;
-    });
+    const mTasks = tasksByMonthKey[activeMonthKey] || [];
 
     return (
       <div style={styles.verticalTimelineContainer}>
@@ -811,11 +819,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
             {months.map((m) => {
               const isZoomed = zoomedMonth && zoomedMonth.key === m.key;
 
-              let mTasks = tasksToRender.filter(t => {
-                if (!t.data_vencimento) return false;
-                const d = new Date(t.data_vencimento);
-                return d.getMonth() === m.month && d.getFullYear() === m.year;
-              });
+              let mTasks = tasksByMonthKey[m.key] || [];
 
               const isCurrentMonth = m.month === currentMonth && m.year === currentYear;
 
