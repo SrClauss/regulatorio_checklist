@@ -125,7 +125,11 @@ export const api = {
       });
       if (!response.ok) throw new Error('Falha ao listar documentos');
       const data = await response.json();
-      localStorage.setItem(cacheKey, JSON.stringify(data));
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify(data));
+      } catch (e) {
+        console.warn('Falha ao salvar documentos no cache offline:', e);
+      }
       return data;
     } catch (error) {
       const cached = localStorage.getItem(cacheKey);
@@ -198,7 +202,11 @@ export const api = {
       });
       if (!response.ok) throw new Error('Falha ao listar tarefas');
       const data = await response.json();
-      localStorage.setItem(cacheKey, JSON.stringify(data));
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify(data));
+      } catch (e) {
+        console.warn('Falha ao salvar tarefas no cache offline:', e);
+      }
       return data;
     } catch (error) {
       const cached = localStorage.getItem(cacheKey);
