@@ -26,6 +26,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   const [todasTarefas, setTodasTarefas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingTasks, setLoadingTasks] = useState(false);
+  const [timelineScrollTop, setTimelineScrollTop] = useState(0);
 
   // Estados de offset dinâmicos para a Linha do Tempo
   const [monthsStartOffset, setMonthsStartOffset] = useState(1);
@@ -208,10 +209,11 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   }, [selectedCompanyId, selectedClasseServicoId, monthsStartOffset, monthsEndOffset, activeTab, gridYear, gridStartMonth, loading]);
 
   const handleScroll = (e) => {
-    if (loadingTasks || zoomedMonth) return;
     const container = e.currentTarget;
     if (!container) return;
+    setTimelineScrollTop(container.scrollTop);
 
+    if (loadingTasks || zoomedMonth) return;
     const { scrollTop, scrollHeight, clientHeight } = container;
 
     // Scroll para baixo: carrega próximos meses
@@ -816,7 +818,29 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
               </div>
             )}
 
-            {months.map((m) => {
+            {(() => {
+              const ROW_HEIGHT = 230;
+              const OVERSCAN = 1;
+              let startIndex = 0;
+              let endIndex = months.length - 1;
+
+              if (!zoomedMonth && containerRef.current) {
+                const containerHeight = containerRef.current.clientHeight || 800;
+                startIndex = Math.max(0, Math.floor(timelineScrollTop / ROW_HEIGHT) - OVERSCAN);
+                endIndex = Math.min(
+                  months.length - 1,
+                  Math.ceil((timelineScrollTop + containerHeight) / ROW_HEIGHT) + OVERSCAN
+                );
+              }
+
+              const visibleMonths = months.slice(startIndex, endIndex + 1);
+              const paddingTop = startIndex * ROW_HEIGHT;
+              const paddingBottom = Math.max(0, (months.length - 1 - endIndex) * ROW_HEIGHT);
+
+              return (
+                <>
+                  {paddingTop > 0 && !zoomedMonth && <div style={{ height: `${paddingTop}px`, width: '100%' }} />}
+                  {visibleMonths.map((m) => {
               const isZoomed = zoomedMonth && zoomedMonth.key === m.key;
 
               let mTasks = tasksByMonthKey[m.key] || [];
@@ -1277,6 +1301,10 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                 </div>
               );
             })}
+            {paddingBottom > 0 && !zoomedMonth && <div style={{ height: `${paddingBottom}px`, width: '100%' }} />}
+          </>
+        );
+      })()}
             
             {/* Botão de Meses Futuros */}
             {!zoomedMonth && (
