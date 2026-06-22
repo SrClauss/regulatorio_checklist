@@ -2234,7 +2234,7 @@ const styles = {
   },
   connectorOdd: {
     top: '10px',
-    height: '42px',
+    height: '22px',
   },
   timelineCompactCard: {
     position: 'absolute',
@@ -2256,7 +2256,7 @@ const styles = {
     bottom: 'auto',
   },
   cardOdd: {
-    bottom: '-115px',
+    bottom: '-95px',
     top: 'auto',
   },
   cardHeaderMini: {
