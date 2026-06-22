@@ -1,5 +1,90 @@
 const API_BASE_URL = import.meta.env.DEV ? 'http://localhost:8000' : '';
 
+class OfflineDB {
+  constructor(dbName = 'ClaudioOffline', storeName = 'cache') {
+    this.dbName = dbName;
+    this.storeName = storeName;
+    this.db = null;
+    this.fallback = {};
+  }
+
+  init() {
+    if (this.db) return Promise.resolve(this.db);
+    return new Promise((resolve) => {
+      if (!window.indexedDB) {
+        console.warn('IndexedDB não suportado. Usando cache em memória.');
+        resolve(null);
+        return;
+      }
+      try {
+        const request = indexedDB.open(this.dbName, 1);
+        request.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains(this.storeName)) {
+            db.createObjectStore(this.storeName);
+          }
+        };
+        request.onsuccess = (e) => {
+          this.db = e.target.result;
+          resolve(this.db);
+        };
+        request.onerror = (e) => {
+          console.warn('Falha ao abrir IndexedDB:', e.target.error);
+          resolve(null);
+        };
+      } catch (err) {
+        console.warn('Erro ao inicializar IndexedDB:', err);
+        resolve(null);
+      }
+    });
+  }
+
+  async get(key) {
+    try {
+      const db = await this.init();
+      if (!db) return this.fallback[key];
+      return new Promise((resolve) => {
+        const tx = db.transaction(this.storeName, 'readonly');
+        const store = tx.objectStore(this.storeName);
+        const request = store.get(key);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => {
+          console.warn('Erro ao ler do IndexedDB:', request.error);
+          resolve(this.fallback[key]);
+        };
+      });
+    } catch (e) {
+      console.warn('Falha no get do cache offline:', e);
+      return this.fallback[key];
+    }
+  }
+
+  async set(key, val) {
+    try {
+      const db = await this.init();
+      if (!db) {
+        this.fallback[key] = val;
+        return;
+      }
+      return new Promise((resolve) => {
+        const tx = db.transaction(this.storeName, 'readwrite');
+        const store = tx.objectStore(this.storeName);
+        const request = store.put(val, key);
+        request.onsuccess = () => resolve();
+        request.onerror = () => {
+          console.warn('Erro ao salvar no IndexedDB:', request.error);
+          this.fallback[key] = val;
+          resolve();
+        };
+      });
+    } catch (e) {
+      console.warn('Falha no set do cache offline:', e);
+      this.fallback[key] = val;
+    }
+  }
+}
+const offlineDB = new OfflineDB();
+
 // Retorna os cabeçalhos de autenticação padrão
 function getHeaders() {
   const token = localStorage.getItem('token');
@@ -125,17 +210,13 @@ export const api = {
       });
       if (!response.ok) throw new Error('Falha ao listar documentos');
       const data = await response.json();
-      try {
-        localStorage.setItem(cacheKey, JSON.stringify(data));
-      } catch (e) {
-        console.warn('Falha ao salvar documentos no cache offline:', e);
-      }
+      await offlineDB.set(cacheKey, data);
       return data;
     } catch (error) {
-      const cached = localStorage.getItem(cacheKey);
+      const cached = await offlineDB.get(cacheKey);
       if (cached) {
         console.warn('Utilizando documentos do cache offline.');
-        return JSON.parse(cached);
+        return cached;
       }
       throw error;
     }
@@ -202,17 +283,13 @@ export const api = {
       });
       if (!response.ok) throw new Error('Falha ao listar tarefas');
       const data = await response.json();
-      try {
-        localStorage.setItem(cacheKey, JSON.stringify(data));
-      } catch (e) {
-        console.warn('Falha ao salvar tarefas no cache offline:', e);
-      }
+      await offlineDB.set(cacheKey, data);
       return data;
     } catch (error) {
-      const cached = localStorage.getItem(cacheKey);
+      const cached = await offlineDB.get(cacheKey);
       if (cached) {
         console.warn('Utilizando tarefas do cache offline.');
-        return JSON.parse(cached);
+        return cached;
       }
       throw error;
     }
