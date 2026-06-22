@@ -208,7 +208,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   }, [selectedCompanyId, selectedClasseServicoId, monthsStartOffset, monthsEndOffset, activeTab, gridYear, gridStartMonth, loading]);
 
   const handleScroll = (e) => {
-    if (loadingTasks) return;
+    if (loadingTasks || zoomedMonth) return;
     const container = e.currentTarget;
     if (!container) return;
 
@@ -229,7 +229,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   };
 
   const handleWheel = (e) => {
-    if (loadingTasks) return;
+    if (loadingTasks || zoomedMonth) return;
     const container = e.currentTarget;
     if (!container) return;
 
