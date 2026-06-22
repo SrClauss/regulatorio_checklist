@@ -47,15 +47,17 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   const [selectedCompanyId, setSelectedCompanyId] = useState('');
   const [zoomedMonth, setZoomedMonth] = useState(null); // null ou { month: number, year: number, label: string, key: string }
 
-  // Estado de Busca e Filtro da Aba Lista Analítica
+  // Estado de Busca e Filtro da Aba Lista Analítica (Filtro Inteligente)
   const [searchTerm, setSearchTerm] = useState('');
   const [listCompanyFilter, setListCompanyFilter] = useState('');
   const [listStatusFilter, setListStatusFilter] = useState('');
   const [listCurrentPage, setListCurrentPage] = useState(1);
+  const [gridYear, setGridYear] = useState(2026);
+  const [gridStartMonth, setGridStartMonth] = useState(6); // Default: Julho (index 6)
 
   useEffect(() => {
     setListCurrentPage(1);
-  }, [searchTerm, listCompanyFilter, listStatusFilter]);
+  }, [searchTerm, listCompanyFilter, listStatusFilter, gridYear, gridStartMonth]);
 
   // Estados de Hover
   const [hoveredTaskId, setHoveredTaskId] = useState(null);
@@ -188,9 +190,23 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
 
   useEffect(() => {
     if (!loading) {
-      fetchTasks(selectedCompanyId, selectedClasseServicoId, monthsStartOffset, monthsEndOffset);
+      if (activeTab === 'lista') {
+        const now = new Date();
+        const startOfGrid = new Date(gridYear, gridStartMonth, 1);
+        const endOfGrid = new Date(gridYear, gridStartMonth + 6, 0);
+        
+        // Calcular a quantidade de meses de distância a partir do mês atual
+        const monthsDiffStart = (now.getFullYear() - startOfGrid.getFullYear()) * 12 + (now.getMonth() - startOfGrid.getMonth());
+        const monthsDiffEnd = (endOfGrid.getFullYear() - now.getFullYear()) * 12 + (endOfGrid.getMonth() - now.getMonth());
+        
+        const start = Math.max(monthsDiffStart, 1);
+        const end = Math.max(monthsDiffEnd, 6);
+        fetchTasks(selectedCompanyId, selectedClasseServicoId, start, end);
+      } else {
+        fetchTasks(selectedCompanyId, selectedClasseServicoId, monthsStartOffset, monthsEndOffset);
+      }
     }
-  }, [selectedCompanyId, selectedClasseServicoId, monthsStartOffset, monthsEndOffset]);
+  }, [selectedCompanyId, selectedClasseServicoId, monthsStartOffset, monthsEndOffset, activeTab, gridYear, gridStartMonth, loading]);
 
   const handleScroll = (e) => {
     if (loadingTasks) return;
@@ -1412,158 +1428,355 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   // VIEW 5: LISTA ANALÍTICA (CHECKLIST GRID)
   // ==========================================
   const renderListaView = () => {
-    // Filtra tarefas com base em termos de busca, empresa e status
-    const tasks = getFilteredTasks().filter(t => {
-      const matchesSearch = t.titulo.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        getClasseServicoNome(t.classe_servico_id).toLowerCase().includes(searchTerm.toLowerCase());
-      
-      const matchesCompany = listCompanyFilter ? t.empresa_id === listCompanyFilter : true;
-      const matchesStatus = listStatusFilter ? t.status === listStatusFilter : true;
+    // 1. Calcular as 6 colunas mensais com base no mês e ano selecionados
+    const columns = [];
+    const monthNamesPt = [
+      'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+      'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+    ];
+    const monthAbbrs = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(gridYear, gridStartMonth + i, 1);
+      const m = monthAbbrs[d.getMonth()];
+      const y = d.getFullYear().toString().slice(-2);
+      columns.push({
+        label: `${m}/${y}`,
+        month: d.getMonth(),
+        year: d.getFullYear(),
+        key: `${d.getFullYear()}-${d.getMonth()}`
+      });
+    }
+
+    // 2. Filtrar tarefas com base na busca por texto e nos filtros de status/empresa/data
+    const filteredTasks = getFilteredTasks().filter(t => {
+      if (!t.data_vencimento) return false;
+
+      // Busca por título ou classe de serviço
+      const matchesSearch = searchTerm ? (
+        t.titulo.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        getClasseServicoNome(t.classe_servico_id).toLowerCase().includes(searchTerm.toLowerCase())
+      ) : true;
+      
+      // Filtro de empresa
+      const matchesCompany = listCompanyFilter ? t.empresa_id === listCompanyFilter : true;
+      
+      // Filtro de status
+      const matchesStatus = listStatusFilter ? t.status === listStatusFilter : true;
+      
       return matchesSearch && matchesCompany && matchesStatus;
     });
 
-    const itemsPerPage = 50;
-    const totalPages = Math.ceil(tasks.length / itemsPerPage);
-    const paginatedTasks = tasks.slice(
-      (listCurrentPage - 1) * itemsPerPage,
-      listCurrentPage * itemsPerPage
-    );
+    // 3. Agrupar tarefas por Cliente (Empresa)
+    const companyTasksMap = {};
+    
+    // Inicializar o mapa para as empresas com base nos filtros
+    filteredTasks.forEach(t => {
+      const taskDate = new Date(t.data_vencimento);
+      const taskMonth = taskDate.getMonth();
+      const taskYear = taskDate.getFullYear();
+      
+      // Verifica se a tarefa cai em alguma das 6 colunas visíveis
+      const colIndex = columns.findIndex(col => col.month === taskMonth && col.year === taskYear);
+      if (colIndex !== -1) {
+        if (!companyTasksMap[t.empresa_id]) {
+          companyTasksMap[t.empresa_id] = {};
+          columns.forEach(col => {
+            companyTasksMap[t.empresa_id][col.key] = [];
+          });
+        }
+        companyTasksMap[t.empresa_id][columns[colIndex].key].push(t);
+      }
+    });
+
+    // Se o usuário selecionou uma empresa específica e ela não tem tarefas no período, vamos incluí-la vazia
+    if (listCompanyFilter && !companyTasksMap[listCompanyFilter]) {
+      companyTasksMap[listCompanyFilter] = {};
+      columns.forEach(col => {
+        companyTasksMap[listCompanyFilter][col.key] = [];
+      });
+    }
+
+    // 4. Transformar em linhas do grid
+    const companyRows = [];
+    Object.keys(companyTasksMap).forEach(companyId => {
+      const monthTasks = companyTasksMap[companyId];
+      
+      // Achar a quantidade máxima de tarefas em qualquer um dos 6 meses para este cliente
+      let maxTasks = 0;
+      columns.forEach(col => {
+        if (monthTasks[col.key].length > maxTasks) {
+          maxTasks = monthTasks[col.key].length;
+        }
+      });
+      
+      // Precisamos de pelo menos 1 linha para representar o cliente se houver filtro
+      const rowsCount = maxTasks > 0 ? maxTasks : (listCompanyFilter ? 1 : 0);
+      
+      if (rowsCount > 0) {
+        companyRows.push({
+          companyId,
+          companyName: getEmpresaNome(companyId),
+          rowsCount,
+          monthTasks
+        });
+      }
+    });
+
+    // Ordenar empresas em ordem alfabética
+    companyRows.sort((a, b) => a.companyName.localeCompare(b.companyName));
+
+    // Obter lista dinâmica de anos disponíveis nas tarefas
+    const getYearsOptions = () => {
+      const years = new Set([2026, new Date().getFullYear()]);
+      todasTarefas.forEach(t => {
+        if (t.data_vencimento) {
+          const y = new Date(t.data_vencimento).getFullYear();
+          if (y) years.add(y);
+        }
+      });
+      return Array.from(years).sort((a, b) => a - b);
+    };
 
     return (
-      <div className="glass-panel animate-fade-in" style={styles.listContainer}>
-        {/* Barra de Filtros e Busca */}
-        <div style={styles.listFilterBar}>
+      <div className="glass-panel animate-fade-in" style={styles.gridContainer}>
+        {/* Barra superior de título do Filtro Inteligente */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <div>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--text-main)' }}>Filtro Inteligente por Período</h3>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Visualize e planeje as demandas agrupadas por clientes em 6 meses consecutivos.</p>
+          </div>
+          
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            {(searchTerm || listCompanyFilter || listStatusFilter) && (
+              <button 
+                style={styles.clearFilterHeaderBtn} 
+                onClick={() => {
+                  setSearchTerm('');
+                  setListCompanyFilter('');
+                  setListStatusFilter('');
+                }}
+              >
+                <X size={12} />
+                <span>Limpar Filtros</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Barra de Filtros Inteligentes (Cliente - Mês - Ano) */}
+        <div style={styles.gridFilterBar}>
+          {/* Caixa de Busca */}
           <div style={styles.searchWrapper}>
             <Search size={18} color="var(--text-light)" />
             <input 
               type="text" 
-              placeholder="Buscar por título ou classe de serviço..."
+              placeholder="Buscar serviço ou classe..."
               style={styles.searchInput}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
 
-          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', flex: 1, justifyContent: 'flex-end' }}>
-            <select 
-              style={styles.listSelect}
-              value={listCompanyFilter}
-              onChange={(e) => setListCompanyFilter(e.target.value)}
-            >
-              <option value="">Todas Empresas</option>
-              {empresas.map(e => (
-                <option key={e._id} value={e._id}>{e.nome_fantasia}</option>
-              ))}
-            </select>
+          {/* Filtros Dropdown */}
+          <div style={styles.gridFiltersRight}>
+            {/* Cliente */}
+            <div style={styles.filterGroup}>
+              <label style={styles.filterLabel}>Cliente:</label>
+              <select 
+                style={styles.listSelect}
+                value={listCompanyFilter}
+                onChange={(e) => setListCompanyFilter(e.target.value)}
+              >
+                <option value="">Todos os Clientes</option>
+                {empresas.map(e => (
+                  <option key={e._id} value={e._id}>{e.nome_fantasia}</option>
+                ))}
+              </select>
+            </div>
 
-            <select 
-              style={styles.listSelect}
-              value={listStatusFilter}
-              onChange={(e) => setListStatusFilter(e.target.value)}
-            >
-              <option value="">Todos Status</option>
-              <option value="Pendente">Pendentes</option>
-              <option value="Em Andamento">Em Andamento</option>
-              <option value="Concluído">Concluídos</option>
-              <option value="Atrasado">Atrasados</option>
-            </select>
+            {/* Status */}
+            <div style={styles.filterGroup}>
+              <label style={styles.filterLabel}>Status:</label>
+              <select 
+                style={styles.listSelect}
+                value={listStatusFilter}
+                onChange={(e) => setListStatusFilter(e.target.value)}
+              >
+                <option value="">Todos Status</option>
+                <option value="Pendente">Pendentes</option>
+                <option value="Em Andamento">Em Andamento</option>
+                <option value="Concluído">Concluídos</option>
+                <option value="Atrasado">Atrasados</option>
+              </select>
+            </div>
+
+            {/* Mês de Início */}
+            <div style={styles.filterGroup}>
+              <label style={styles.filterLabel}>Início:</label>
+              <select 
+                style={styles.listSelect}
+                value={gridStartMonth}
+                onChange={(e) => setGridStartMonth(Number(e.target.value))}
+              >
+                {monthNamesPt.map((name, idx) => (
+                  <option key={idx} value={idx}>{name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Ano */}
+            <div style={styles.filterGroup}>
+              <label style={styles.filterLabel}>Ano:</label>
+              <select 
+                style={styles.listSelect}
+                value={gridYear}
+                onChange={(e) => setGridYear(Number(e.target.value))}
+              >
+                {getYearsOptions().map(year => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
-        {/* Tabela de Dados */}
-        <div style={{ overflowX: 'auto' }}>
-          <table style={styles.table}>
+        {/* Tabela de Dados Matricial */}
+        <div style={styles.gridTableWrapper}>
+          <table style={styles.gridTable}>
             <thead>
-              <tr style={styles.tableHeaderRow}>
-                <th style={styles.th}>Status</th>
-                <th style={styles.th}>Obrigação / Condicionante</th>
-                <th style={styles.th}>Empresa</th>
-                <th style={styles.th}>Classe de Serviço</th>
-                <th style={styles.th}>Vencimento</th>
-                <th style={{ ...styles.th, textAlign: 'right' }}>Valor</th>
-                <th style={{ ...styles.th, textAlign: 'center' }}>Ações</th>
+              <tr style={styles.gridTableHeaderRow}>
+                <th style={{ ...styles.gridTh, width: '50px', textAlign: 'center' }}>Nº</th>
+                <th style={{ ...styles.gridTh, width: '220px' }}>Nome do Cliente</th>
+                {columns.map(col => (
+                  <th key={col.key} style={styles.gridThMonth}>
+                    {col.label.toUpperCase()}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {paginatedTasks.length === 0 ? (
+              {companyRows.length === 0 ? (
                 <tr>
-                  <td colSpan="7" style={styles.tdEmpty}>Nenhuma obrigação encontrada com os filtros selecionados.</td>
+                  <td colSpan={columns.length + 2} style={styles.tdEmpty}>
+                    Nenhuma obrigação encontrada para os filtros e período selecionados.
+                  </td>
                 </tr>
               ) : (
-                paginatedTasks.map(t => (
-                  <tr key={t._id} style={styles.tableRow} onClick={() => onViewTask(t._id)}>
-                    <td style={styles.td}>
-                      <span style={{
-                        ...styles.statusBadge,
-                        ...getTaskStatusBadgeStyle(t)
-                      }}>
-                        {t.status === 'Concluído' ? 'Concluída' : isTaskOverdue(t) ? 'Atrasada' : t.status}
-                      </span>
-                    </td>
-                    <td style={{ ...styles.td, fontWeight: '600' }}>{t.titulo}</td>
-                    <td style={styles.td}>{getEmpresaNome(t.empresa_id)}</td>
-                    <td style={styles.td}>{getClasseServicoNome(t.classe_servico_id)}</td>
-                    <td style={styles.td}>{formatDate(t.data_vencimento)}</td>
-                    <td style={{ ...styles.td, textAlign: 'right', fontWeight: 'bold' }}>R$ {t.valor_estimado || 0}</td>
-                    <td style={{ ...styles.td, textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
-                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                        {t.status !== 'Concluído' && (
-                          <button 
-                            style={styles.actionCircleBtn}
-                            onClick={() => handleConcludeTask(t._id)}
-                            title="Marcar como concluída"
-                          >
-                            <CheckCircle2 size={15} color="var(--success)" />
-                          </button>
-                        )}
-                        <button 
-                          style={styles.actionCircleBtn}
-                          onClick={() => onViewTask(t._id)}
-                          title="Ver detalhes"
-                        >
-                          <TrendingUp size={15} color="var(--primary)" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                (() => {
+                  let globalRowIndex = 0;
+                  return companyRows.flatMap(comp => {
+                    const rows = [];
+                    for (let i = 0; i < comp.rowsCount; i++) {
+                      globalRowIndex++;
+                      const isFirstRow = i === 0;
+                      
+                      rows.push(
+                        <tr key={`${comp.companyId}-row-${i}`} style={styles.gridTableRow}>
+                          {/* Número da Linha */}
+                          <td style={styles.gridTdIndex}>
+                            {globalRowIndex}
+                          </td>
+                          
+                          {/* Nome do Cliente (repetido em cada linha para manter a conformidade com a planilha) */}
+                          <td style={{ 
+                            ...styles.gridTdClient, 
+                            fontWeight: isFirstRow ? '700' : '400',
+                            color: isFirstRow ? 'var(--text-main)' : 'var(--text-light)',
+                            borderTop: isFirstRow && globalRowIndex > 1 ? '1px solid rgba(0,0,0,0.08)' : 'none'
+                          }}>
+                            {comp.companyName}
+                          </td>
+                          
+                          {/* Meses do Grid */}
+                          {columns.map(col => {
+                            const tasksInCol = comp.monthTasks[col.key] || [];
+                            const task = tasksInCol[i];
+                            
+                            return (
+                              <td key={col.key} style={{
+                                ...styles.gridTdCell,
+                                borderTop: isFirstRow && globalRowIndex > 1 ? '1px solid rgba(0,0,0,0.08)' : 'none'
+                              }}>
+                                {task ? (
+                                  <div 
+                                    style={{
+                                      ...styles.gridTaskCard,
+                                      borderLeft: `4px solid ${getTaskStatusColor(task)}`,
+                                    }}
+                                    onClick={() => onViewTask && onViewTask(task._id)}
+                                    title={`Vence em: ${formatDate(task.data_vencimento)}`}
+                                  >
+                                    <div style={styles.gridTaskCardHeader}>
+                                      <span style={styles.gridTaskCardTitle} title={task.titulo}>
+                                        {task.titulo}
+                                      </span>
+                                      <span style={{
+                                        ...styles.gridStatusDot,
+                                        background: getTaskStatusColor(task)
+                                      }} title={task.status} />
+                                    </div>
+                                    
+                                    <div style={styles.gridTaskCardBody}>
+                                      <span style={styles.gridTaskCardClass} title={getClasseServicoNome(task.classe_servico_id)}>
+                                        {getClasseServicoNome(task.classe_servico_id)}
+                                      </span>
+                                      <span style={styles.gridTaskCardVal}>
+                                        R$ {task.valor_estimado ? Number(task.valor_estimado).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00'}
+                                      </span>
+                                    </div>
+                                    
+                                    {/* Botão flutuante de ação rápida para concluir */}
+                                    {task.status !== 'Concluído' && (
+                                      <div style={styles.gridTaskCardActions} onClick={(e) => e.stopPropagation()}>
+                                        <button 
+                                          style={styles.gridActionBtn} 
+                                          onClick={() => handleConcludeTask(task._id)}
+                                          title="Concluir serviço"
+                                        >
+                                          <CheckCircle2 size={12} color="var(--success)" />
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div style={styles.gridEmptyCell}>-</div>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    }
+                    return rows;
+                  });
+                })()
               )}
             </tbody>
+            <tfoot>
+              {/* Linha de Total Geral */}
+              <tr style={styles.gridTotalRow}>
+                <td colSpan={2} style={styles.gridTotalLabel}>
+                  R$ TOTAL MENSAL
+                </td>
+                {columns.map(col => {
+                  let colTotal = 0;
+                  companyRows.forEach(comp => {
+                    const tasksInCol = comp.monthTasks[col.key] || [];
+                    tasksInCol.forEach(t => {
+                      colTotal += Number(t.valor_estimado) || 0;
+                    });
+                  });
+                  
+                  return (
+                    <td key={col.key} style={styles.gridTotalVal}>
+                      R$ {colTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                  );
+                })}
+              </tr>
+            </tfoot>
           </table>
-
-          {/* Pagination Controls */}
-          {totalPages > 1 && (
-            <div style={styles.paginationContainer}>
-              <button 
-                disabled={listCurrentPage === 1} 
-                onClick={() => setListCurrentPage(prev => Math.max(prev - 1, 1))}
-                style={{
-                  ...styles.pageBtn,
-                  opacity: listCurrentPage === 1 ? 0.5 : 1,
-                  cursor: listCurrentPage === 1 ? 'not-allowed' : 'pointer'
-                }}
-                className="glass-btn"
-              >
-                Anterior
-              </button>
-              <span style={styles.pageIndicator}>
-                Página {listCurrentPage} de {totalPages} ({tasks.length} condicionantes)
-              </span>
-              <button 
-                disabled={listCurrentPage === totalPages} 
-                onClick={() => setListCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                style={{
-                  ...styles.pageBtn,
-                  opacity: listCurrentPage === totalPages ? 0.5 : 1,
-                  cursor: listCurrentPage === totalPages ? 'not-allowed' : 'pointer'
-                }}
-                className="glass-btn"
-              >
-                Próxima
-              </button>
-            </div>
-          )}
         </div>
       </div>
     );
@@ -1628,7 +1841,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
           style={activeTab === 'lista' ? styles.activeTab : styles.tab} 
           onClick={() => setActiveTab('lista')}
         >
-          <SlidersHorizontal size={18} /> Lista Analítica
+          <SlidersHorizontal size={18} /> Filtro Inteligente
         </button>
       </div>
 
@@ -2389,95 +2602,206 @@ const styles = {
     color: 'var(--text-muted)',
   },
 
-  // STYLES: Lista Analítica
-  listContainer: {
+  // STYLES: Filtro Inteligente (Monthly Grid View)
+  gridContainer: {
     padding: '1.5rem',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1.5rem',
   },
-  listFilterBar: {
+  gridFilterBar: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
     gap: '1rem',
-    marginBottom: '1.5rem',
     flexWrap: 'wrap',
   },
-  searchWrapper: {
+  gridFiltersRight: {
     display: 'flex',
+    gap: '0.75rem',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    gap: '0.5rem',
-    background: 'rgba(255, 255, 255, 0.4)',
+  },
+  gridTableWrapper: {
+    overflowX: 'auto',
+    borderRadius: '16px',
     border: '1px solid var(--glass-border)',
-    borderRadius: '12px',
-    padding: '0.5rem 0.75rem',
-    minWidth: '280px',
+    background: 'rgba(255, 255, 255, 0.15)',
+    boxShadow: 'var(--shadow-md)',
   },
-  searchInput: {
-    border: 'none',
-    background: 'transparent',
-    fontSize: '0.85rem',
-    outline: 'none',
-    color: 'var(--text-main)',
+  gridTable: {
     width: '100%',
-  },
-  listSelect: {
-    padding: '0.5rem 1rem',
-    borderRadius: '12px',
-    border: '1px solid var(--glass-border)',
-    background: 'rgba(255, 255, 255, 0.6)',
-    color: 'var(--text-main)',
-    fontSize: '0.85rem',
-    outline: 'none',
-    cursor: 'pointer',
-  },
-  table: {
-    width: '100%',
-    borderCollapse: 'collapse',
+    borderCollapse: 'separate',
+    borderSpacing: '0',
     textAlign: 'left',
   },
-  tableHeaderRow: {
-    borderBottom: '2px solid var(--glass-border)',
+  gridTableHeaderRow: {
+    background: 'rgba(255, 255, 255, 0.45)',
   },
-  th: {
-    padding: '0.75rem 1rem',
+  gridTh: {
+    padding: '1rem',
     fontSize: '0.85rem',
     fontWeight: '700',
-    color: 'var(--text-light)',
+    color: 'var(--text-main)',
+    borderBottom: '2px solid var(--glass-border)',
+    fontFamily: 'var(--font-heading)',
   },
-  tableRow: {
-    borderBottom: '1px solid rgba(0,0,0,0.03)',
-    cursor: 'pointer',
+  gridThMonth: {
+    padding: '1rem',
+    fontSize: '0.85rem',
+    fontWeight: '700',
+    color: 'var(--text-main)',
+    textAlign: 'center',
+    borderBottom: '2px solid var(--glass-border)',
+    borderLeft: '1px solid var(--glass-border)',
+    fontFamily: 'var(--font-heading)',
+    background: 'rgba(37, 99, 235, 0.04)',
+    minWidth: '220px',
+  },
+  gridTableRow: {
     transition: 'background 0.2s',
   },
-  td: {
-    padding: '0.85rem 1rem',
+  gridTdIndex: {
+    padding: '1rem 0.5rem',
+    fontSize: '0.8rem',
+    fontWeight: '600',
+    color: 'var(--text-light)',
+    textAlign: 'center',
+    borderBottom: '1px solid rgba(0,0,0,0.05)',
+  },
+  gridTdClient: {
+    padding: '1rem',
     fontSize: '0.85rem',
     color: 'var(--text-main)',
+    borderBottom: '1px solid rgba(0,0,0,0.05)',
+    borderRight: '1px solid var(--glass-border)',
+    verticalAlign: 'middle',
+    background: 'rgba(255, 255, 255, 0.12)',
+  },
+  gridTdCell: {
+    padding: '0.75rem',
+    borderBottom: '1px solid rgba(0,0,0,0.05)',
+    borderLeft: '1px solid var(--glass-border)',
+    verticalAlign: 'middle',
+    background: 'rgba(255, 255, 255, 0.03)',
+  },
+  gridEmptyCell: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: 'var(--text-light)',
+    fontSize: '0.9rem',
+    opacity: 0.25,
+  },
+  gridTaskCard: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.5rem',
+    padding: '0.75rem',
+    borderRadius: '12px',
+    background: 'rgba(255, 255, 255, 0.65)',
+    border: '1px solid var(--glass-border)',
+    boxShadow: 'var(--shadow-sm)',
+    position: 'relative',
+    cursor: 'pointer',
+    transition: 'all 0.25s ease',
+    minHeight: '76px',
+  },
+  gridTaskCardHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: '0.5rem',
+  },
+  gridTaskCardTitle: {
+    fontSize: '0.825rem',
+    fontWeight: '700',
+    color: 'var(--text-main)',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    display: '-webkit-box',
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: 'vertical',
+    lineHeight: '1.25',
+  },
+  gridStatusDot: {
+    width: '8px',
+    height: '8px',
+    borderRadius: '50%',
+    flexShrink: 0,
+    marginTop: '4px',
+  },
+  gridTaskCardBody: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginTop: 'auto',
+    gap: '0.5rem',
+  },
+  gridTaskCardClass: {
+    fontSize: '0.7rem',
+    fontWeight: '600',
+    color: 'var(--text-light)',
+    textTransform: 'uppercase',
+    maxWidth: '120px',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  gridTaskCardVal: {
+    fontSize: '0.8rem',
+    fontWeight: '700',
+    color: 'var(--primary)',
+  },
+  gridTaskCardActions: {
+    position: 'absolute',
+    bottom: '6px',
+    right: '6px',
+    display: 'flex',
+    gap: '4px',
+  },
+  gridActionBtn: {
+    border: 'none',
+    background: 'rgba(16, 185, 129, 0.15)',
+    borderRadius: '50%',
+    width: '22px',
+    height: '22px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    outline: 'none',
+  },
+  gridTotalRow: {
+    background: 'rgba(245, 158, 11, 0.08)',
+    borderTop: '2px solid rgba(245, 158, 11, 0.25)',
+    borderBottom: '2px solid rgba(245, 158, 11, 0.25)',
+  },
+  gridTotalLabel: {
+    padding: '1.25rem 1rem',
+    fontSize: '0.9rem',
+    fontWeight: '800',
+    color: '#b45309',
+    textAlign: 'right',
+    textTransform: 'uppercase',
+    letterSpacing: '1px',
+    fontFamily: 'var(--font-heading)',
+  },
+  gridTotalVal: {
+    padding: '1.25rem 1rem',
+    fontSize: '0.9rem',
+    fontWeight: '800',
+    color: '#b45309',
+    textAlign: 'center',
+    borderLeft: '1px solid rgba(245, 158, 11, 0.15)',
+    fontFamily: 'var(--font-heading)',
   },
   tdEmpty: {
     padding: '2rem',
     textAlign: 'center',
     color: 'var(--text-light)',
     fontStyle: 'italic',
-  },
-  statusBadge: {
-    fontSize: '0.7rem',
-    fontWeight: '700',
-    padding: '0.2rem 0.5rem',
-    borderRadius: '6px',
-    display: 'inline-block',
-  },
-  actionCircleBtn: {
-    border: 'none',
-    background: 'var(--glass-bg)',
-    border: '1px solid var(--glass-border)',
-    width: '28px',
-    height: '28px',
-    borderRadius: '50%',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    cursor: 'pointer',
-    transition: 'all 0.2s',
   },
 
   // Loader / Auxiliar

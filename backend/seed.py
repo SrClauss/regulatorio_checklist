@@ -329,27 +329,20 @@ async def run_seed():
         cliente_res = await db.usuarios.insert_one(cliente_db.model_dump(by_alias=True, exclude={"id"}))
         cliente_id = cliente_res.inserted_id
         
-        # 3. Distribuição de Prazos baseada no índice da empresa (com até 2 anos de retroatividade)
+        # 3. Distribuição de Prazos baseada no índice da empresa (retroagindo para cobrir 2025, 2026, 2027)
+        # Vamos começar a emissão inicial no ano de 2024 (entre Janeiro e Dezembro de 2024)
         dia_emissao = (idx * 4) % 26 + 2
-        meses_retroativos = (idx * 5) % 24 + 1
-        
-        # Calcula data de emissão retroativa distribuída
-        data_emissao_emp = add_months(hoje, -meses_retroativos)
-        # Ajusta o dia para evitar estouros
-        max_dias_mes = [31,
-            29 if data_emissao_emp.year % 4 == 0 and (data_emissao_emp.year % 100 != 0 or data_emissao_emp.year % 400 == 0) else 28,
-            31, 30, 31, 30, 31, 31, 30, 31, 30, 31][data_emissao_emp.month-1]
-        dia_emissao = min(dia_emissao, max_dias_mes)
-        data_emissao_emp = data_emissao_emp.replace(day=dia_emissao)
+        mes_emissao = (idx * 3) % 12 + 1
+        data_emissao_emp = datetime(2024, mes_emissao, dia_emissao)
         
         segmento = emp["seg"]
         if segmento in templates_dict:
             _, template = templates_dict[segmento]
             validade_meses = template.validade_meses_padrao
             
-            # loop para simular renovações históricas até o futuro (hoje + 12 meses)
+            # loop para simular renovações históricas até o futuro (cobrir até o final de 2027)
             current_emissao = data_emissao_emp
-            while current_emissao < hoje + timedelta(days=365):
+            while current_emissao < datetime(2028, 1, 1):
                 data_vencimento_emp = add_months(current_emissao, validade_meses)
                 
                 # status do documento
@@ -434,7 +427,8 @@ async def run_seed():
                 current_emissao = data_vencimento_emp
                 
         # 5. Adiciona uma tarefa avulsa de rotina distribuída no tempo
-        dias_offset = (idx * 17) % 730 - 365  # Varia de -365 a +365 dias da data atual
+        # 5. Adiciona uma tarefa avulsa de rotina distribuída no tempo (cobrindo 3 anos: 2025, 2026, 2027)
+        dias_offset = (idx * 17) % 1080 - 540  # Varia de -540 a +540 dias da data atual
         data_vencimento_extra = hoje + timedelta(days=dias_offset)
         
         if data_vencimento_extra < hoje:
