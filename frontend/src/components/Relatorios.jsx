@@ -348,12 +348,16 @@ export default function Relatorios({ user }) {
         size: landscape;
         margin: 1cm;
       }
+      html, body, #root, .app-container, .main-content {
+        height: auto !important;
+        min-height: auto !important;
+        overflow: visible !important;
+        position: static !important;
+        display: block !important;
+      }
       body {
         background: #ffffff !important;
         color: #000000 !important;
-      }
-      .app-container {
-        display: block !important;
       }
       .sidebar-container, .mobile-top-header, .no-print, button, select, input {
         display: none !important;
@@ -362,7 +366,6 @@ export default function Relatorios({ user }) {
         margin: 0 !important;
         padding: 0 !important;
         max-width: 100% !important;
-        overflow: visible !important;
       }
       .glass-panel, .glass-card {
         background: transparent !important;
