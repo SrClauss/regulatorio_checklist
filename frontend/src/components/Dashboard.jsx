@@ -27,16 +27,21 @@ export default function Dashboard({ user, onNavigateTab }) {
         const mes = now.getMonth() + 1;
         const ano = now.getFullYear();
 
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
+
         // Carrega dados agregados em paralelo
-        const [prevMensal, prevAnual, tarefas, csList] = await Promise.all([
+        const [prevMensal, prevAnual, tarefasMes, csList, tarefasAtrasadas, documentos] = await Promise.all([
           (user.role === 'admin' || user.role === 'consultor') 
             ? api.getPrevisibilidadeMensal(mes, ano) 
             : Promise.resolve({ faturamento_total: 0, faturamento_renovacoes: 0, faturamento_condicionantes: 0 }),
           (user.role === 'admin' || user.role === 'consultor') 
             ? api.getPrevisibilidadeAnual(ano) 
             : Promise.resolve({ consolidado_mensal: [] }),
-          api.listTarefas(),
-          api.listClasseServicos()
+          api.listTarefas({ data_inicio: startOfMonth, data_fim: endOfMonth }),
+          api.listClasseServicos(),
+          api.listTarefas({ status: 'Atrasado' }),
+          api.listDocumentos()
         ]);
 
         if (user.role === 'admin' || user.role === 'consultor') {
@@ -44,19 +49,13 @@ export default function Dashboard({ user, onNavigateTab }) {
           setAnualData(prevAnual.consolidado_mensal || []);
         }
 
-        // 1. Total de tarefas pendentes gerais (sistema)
-        const pendentesGeral = tarefas.filter(t => t.status === 'Pendente');
-        setTarefasCount(pendentesGeral.length);
+        // 1. Total de tarefas pendentes gerais no sistema -> substituído pelas tarefas atrasadas globais
+        setTarefasCount(tarefasAtrasadas.length);
+        
+        // Vamos guardar também a lista de atrasadas e documentos no estado
+        setTopClasseServico(prev => ({ ...prev, atrasadas: tarefasAtrasadas.slice(0, 5), docCount: documentos.length }));
 
-        // 2. Tarefas do mês atual
-        const currentMonthIndex = now.getMonth(); // 0-11
-        const currentYear = now.getFullYear();
-
-        const tarefasMes = tarefas.filter(t => {
-          if (!t.data_vencimento) return false;
-          const d = new Date(t.data_vencimento);
-          return d.getMonth() === currentMonthIndex && d.getFullYear() === currentYear;
-        });
+        // 2. Tarefas do mês atual (Já vem filtrado do backend! FIM DO GARGALO!)
         setTarefasMesCount(tarefasMes.length);
 
         // 3. Taxa de Conformidade do Mês (Concluídas / Total do Mês)
@@ -193,7 +192,7 @@ export default function Dashboard({ user, onNavigateTab }) {
             <h2 style={styles.cardVal}>{tarefasMesCount}</h2>
             <div style={styles.cardDetails}>
               <span style={{ color: 'var(--text-light)', fontSize: '0.78rem' }}>
-                Pendentes gerais no sistema: {tarefasCount}
+                Condicionantes em vermelho: {tarefasCount}
               </span>
             </div>
           </div>
@@ -281,39 +280,40 @@ export default function Dashboard({ user, onNavigateTab }) {
           </div>
         )}
 
-        {/* Bloco de Planejamento TODO (Amanhã) */}
+        {/* Bloco de Obrigações Atrasadas (Substituindo o antigo TODO) */}
         <div className="glass-panel" style={{ ...styles.chartPanel, flex: 1, height: 'auto', minHeight: '380px' }}>
           <div style={styles.panelHeader}>
-            <CheckSquare size={20} color="var(--primary)" />
-            <h3 style={styles.panelTitle}>Planejamento de Desenvolvimento</h3>
+            <Bell size={20} color="var(--danger)" />
+            <h3 style={styles.panelTitle}>Atenção: Obrigações Atrasadas</h3>
           </div>
 
           <div style={styles.todoContainer}>
-            <div style={styles.todoBadge}>Vou Fazer Amanhã</div>
-            <h4 style={styles.todoTitle}>Melhorias no Módulo de Prestadores</h4>
+            <div style={{ ...styles.todoBadge, background: 'var(--danger-light)', color: 'var(--danger)' }}>
+              CRÍTICO ({tarefasCount} no total)
+            </div>
+            <h4 style={styles.todoTitle}>Ação Imediata Necessária</h4>
             
             <div style={styles.todoList}>
-              <div style={styles.todoItem}>
-                <input type="checkbox" readOnly checked={false} style={styles.todoCheck} />
-                <span style={styles.todoText}>Designação de fornecedores a condicionantes e licenças.</span>
-              </div>
-              <div style={styles.todoItem}>
-                <input type="checkbox" readOnly checked={false} style={styles.todoCheck} />
-                <span style={styles.todoText}>Mapeamento de tarifas de consultoria e custos por prestador.</span>
-              </div>
-              <div style={styles.todoItem}>
-                <input type="checkbox" readOnly checked={false} style={styles.todoCheck} />
-                <span style={styles.todoText}>Painel de performance e cumprimento de prazos dos terceiros.</span>
-              </div>
-              <div style={styles.todoItem}>
-                <input type="checkbox" readOnly checked={false} style={styles.todoCheck} />
-                <span style={styles.todoText}>Filtro por prestadores no cronograma de compliance.</span>
-              </div>
+              {topClasseServico.atrasadas && topClasseServico.atrasadas.length > 0 ? (
+                topClasseServico.atrasadas.map(t => (
+                  <div key={t._id} style={{ ...styles.todoItem, cursor: 'pointer' }} onClick={() => onNavigateTab && onNavigateTab('cronograma')} title="Ver no Cronograma">
+                    <CheckSquare size={16} color="var(--danger)" style={{ marginTop: '2px', flexShrink: 0 }} />
+                    <span style={styles.todoText}>
+                      <strong>{new Date(t.data_vencimento).toLocaleDateString('pt-BR')}</strong>: {t.titulo}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div style={styles.todoItem}>
+                  <CheckCircle2 size={16} color="var(--success)" style={{ marginTop: '2px', flexShrink: 0 }} />
+                  <span style={styles.todoText}>Nenhuma obrigação atrasada! Excelente trabalho.</span>
+                </div>
+              )}
             </div>
 
             <div style={styles.todoFooter}>
               <Users size={14} color="var(--text-light)" />
-              <span>Módulo: <code>frontend/src/components/Prestadores.jsx</code></span>
+              <span>Base de Licenças e Documentos Ativos: <strong>{topClasseServico.docCount || 0}</strong></span>
             </div>
           </div>
         </div>
