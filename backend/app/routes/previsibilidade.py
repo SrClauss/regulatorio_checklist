@@ -140,40 +140,37 @@ async def get_yearly_predictability(
     db = get_database()
     
     resumo_anual = []
-    
+    start_year = datetime(ano, 1, 1, 0, 0, 0)
+    end_year = datetime(ano + 1, 1, 1, 0, 0, 0)
+
+    filtro_tarefas = {"data_vencimento": {"$gte": start_year, "$lt": end_year}}
+    filtro_docs = {"data_vencimento": {"$gte": start_year, "$lt": end_year}}
+
+    if current_user.role == "consultor":
+        empresas_cursor = db.empresas.find({"responsavel_principal_id": current_user.id})
+        empresas = await empresas_cursor.to_list(length=1000)
+        empresa_ids = [e["_id"] for e in empresas]
+        filtro_tarefas["empresa_id"] = {"$in": empresa_ids}
+        filtro_docs["responsavel_renovacao_id"] = current_user.id
+
+    pipeline_tarefas = [
+        {"$match": filtro_tarefas},
+        {"$group": {"_id": {"$month": "$data_vencimento"}, "total": {"$sum": "$valor_estimado"}}}
+    ]
+    pipeline_docs = [
+        {"$match": filtro_docs},
+        {"$group": {"_id": {"$month": "$data_vencimento"}, "total": {"$sum": "$valor_renovacao"}}}
+    ]
+
+    tarefas_agrupadas = await db.tarefas.aggregate(pipeline_tarefas).to_list(length=12)
+    docs_agrupados = await db.documentos.aggregate(pipeline_docs).to_list(length=12)
+
+    tarefas_dict = {item["_id"]: item["total"] for item in tarefas_agrupadas}
+    docs_dict = {item["_id"]: item["total"] for item in docs_agrupados}
+
     for mes in range(1, 13):
-        start_date = datetime(ano, mes, 1, 0, 0, 0)
-        if mes == 12:
-            end_date = datetime(ano + 1, 1, 1, 0, 0, 0)
-        else:
-            end_date = datetime(ano, mes + 1, 1, 0, 0, 0)
-            
-        # Filtros de segurança
-        filtro_tarefas = {"data_vencimento": {"$gte": start_date, "$lt": end_date}}
-        filtro_docs = {"data_vencimento": {"$gte": start_date, "$lt": end_date}}
-        
-        if current_user.role == "consultor":
-            empresas_cursor = db.empresas.find({"responsavel_principal_id": current_user.id})
-            empresas = await empresas_cursor.to_list(length=1000)
-            empresa_ids = [e["_id"] for e in empresas]
-            filtro_tarefas["empresa_id"] = {"$in": empresa_ids}
-            filtro_docs["responsavel_renovacao_id"] = current_user.id
-            
-        # Sumariza condicionantes do mês
-        pipeline_sum_tarefas = [
-            {"$match": filtro_tarefas},
-            {"$group": {"_id": None, "total": {"$sum": "$valor_estimado"}}}
-        ]
-        sum_tarefas_res = await db.tarefas.aggregate(pipeline_sum_tarefas).to_list(length=1)
-        valor_tarefas = sum_tarefas_res[0]["total"] if sum_tarefas_res else 0.0
-        
-        # Sumariza renovações do mês
-        pipeline_sum_docs = [
-            {"$match": filtro_docs},
-            {"$group": {"_id": None, "total": {"$sum": "$valor_renovacao"}}}
-        ]
-        sum_docs_res = await db.documentos.aggregate(pipeline_sum_docs).to_list(length=1)
-        valor_docs = sum_docs_res[0]["total"] if sum_docs_res else 0.0
+        valor_tarefas = tarefas_dict.get(mes, 0.0)
+        valor_docs = docs_dict.get(mes, 0.0)
         
         resumo_anual.append({
             "mes": mes,
