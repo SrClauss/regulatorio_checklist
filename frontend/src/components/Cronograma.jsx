@@ -105,6 +105,32 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  useEffect(() => {
+    if (isMobile) return;
+    const mainContent = document.querySelector('.main-content');
+    if (mainContent) {
+      const originalOverflow = mainContent.style.overflow;
+      const originalHeight = mainContent.style.height;
+      const originalMaxHeight = mainContent.style.maxHeight;
+      const originalDisplay = mainContent.style.display;
+      const originalFlexDirection = mainContent.style.flexDirection;
+
+      mainContent.style.overflow = 'hidden';
+      mainContent.style.display = 'flex';
+      mainContent.style.flexDirection = 'column';
+      mainContent.style.height = '100vh';
+      mainContent.style.maxHeight = '100vh';
+
+      return () => {
+        mainContent.style.overflow = originalOverflow;
+        mainContent.style.display = originalDisplay;
+        mainContent.style.flexDirection = originalFlexDirection;
+        mainContent.style.height = originalHeight;
+        mainContent.style.maxHeight = originalMaxHeight;
+      };
+    }
+  }, [isMobile]);
+
   const [selectedMobileMonthKey, setSelectedMobileMonthKey] = useState(`${new Date().getFullYear()}-${new Date().getMonth()}`);
   const [expandedMobileTaskIds, setExpandedMobileTaskIds] = useState([]);
 
@@ -227,17 +253,17 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
     setTimelineScrollTop(container.scrollTop);
 
     if (loadingTasks || zoomedMonth) return;
-    const { scrollTop, clientHeight } = container;
+    const { scrollTop, clientHeight, scrollHeight } = container;
 
-    const ROW_HEIGHT = 230;
-    const centerIndex = Math.floor((scrollTop + clientHeight / 2) / ROW_HEIGHT);
+    // Use boundary-based detection instead of center-index to prevent unstable shifting
+    const TRIGGER_THRESHOLD = 30; // px near top/bottom to shift
 
-    if (centerIndex === 0 && !shouldCompensateScrollRef.current) {
+    if (scrollTop < TRIGGER_THRESHOLD && !shouldCompensateScrollRef.current) {
       lastScrollTopRef.current = scrollTop;
       shiftDirectionRef.current = 'up';
       shouldCompensateScrollRef.current = true;
       setCenterMonthDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
-    } else if (centerIndex === 2 && !shouldCompensateScrollRef.current) {
+    } else if (scrollTop + clientHeight > scrollHeight - TRIGGER_THRESHOLD && !shouldCompensateScrollRef.current) {
       lastScrollTopRef.current = scrollTop;
       shiftDirectionRef.current = 'down';
       shouldCompensateScrollRef.current = true;
@@ -270,7 +296,8 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
         containerRef.current.scrollLeft = 150;
         const currentMonthEl = document.getElementById('current-month-row');
         if (currentMonthEl) {
-          containerRef.current.scrollTop = currentMonthEl.offsetTop - 45;
+          const containerHeight = containerRef.current.clientHeight || 520;
+          containerRef.current.scrollTop = currentMonthEl.offsetTop - (containerHeight - 230) / 2;
         }
       }, 300);
     }
@@ -652,11 +679,18 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
       ...styles.timelineWrapper,
       padding: isMobile ? '0.75rem' : '1.5rem',
       borderRadius: isMobile ? '16px' : '24px',
+      display: isMobile ? 'block' : 'flex',
+      flexDirection: isMobile ? 'row' : 'column',
+      flex: isMobile ? 'none' : 1,
+      minHeight: isMobile ? 'none' : 0,
+      overflow: isMobile ? 'visible' : 'hidden',
     };
 
     const containerStyle = {
       ...styles.timelineContainer,
-      maxHeight: isMobile ? 'none' : '520px',
+      flex: isMobile ? 'none' : 1,
+      minHeight: isMobile ? 'none' : 0,
+      maxHeight: isMobile ? 'none' : 'none',
     };
 
     return (
@@ -1344,9 +1378,18 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
     };
 
     return (
-      <div style={styles.kanbanContainer} className="animate-fade-in">
+      <div style={{
+        ...styles.kanbanContainer,
+        flex: isMobile ? 'none' : 1,
+        minHeight: isMobile ? 'none' : 0,
+        overflow: isMobile ? 'visible' : 'hidden'
+      }} className="animate-fade-in">
         {Object.entries(columns).map(([key, col]) => (
-          <div key={key} className="glass-panel" style={styles.kanbanColumn}>
+          <div key={key} className="glass-panel" style={{
+            ...styles.kanbanColumn,
+            height: isMobile ? 'auto' : '100%',
+            maxHeight: isMobile ? 'none' : 'none'
+          }}>
             <div style={{ ...styles.kanbanColumnHeader, borderBottom: `3px solid ${col.color}`, flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
                 <h4 style={styles.kanbanColumnTitle}>{col.title}</h4>
@@ -1539,7 +1582,12 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
     };
 
     return (
-      <div className="glass-panel animate-fade-in" style={styles.gridContainer}>
+      <div className="glass-panel animate-fade-in" style={{
+        ...styles.gridContainer,
+        flex: isMobile ? 'none' : 1,
+        minHeight: isMobile ? 'none' : 0,
+        overflow: isMobile ? 'visible' : 'hidden'
+      }}>
         {/* Barra superior de título do Filtro Inteligente */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
           <div>
@@ -1642,7 +1690,12 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
         </div>
 
         {/* Tabela de Dados Matricial */}
-        <div style={styles.gridTableWrapper}>
+        <div style={{
+          ...styles.gridTableWrapper,
+          flex: isMobile ? 'none' : 1,
+          minHeight: isMobile ? 'none' : 0,
+          overflowY: isMobile ? 'visible' : 'auto'
+        }}>
           <table style={styles.gridTable}>
             <thead>
               <tr style={styles.gridTableHeaderRow}>
@@ -1793,7 +1846,12 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   }
 
   return (
-    <div className="animate-fade-in" style={{ ...styles.container, position: 'relative' }}>
+    <div className="animate-fade-in" style={{ 
+      ...styles.container, 
+      position: 'relative',
+      height: isMobile ? 'auto' : '100%',
+      overflow: isMobile ? 'visible' : 'hidden'
+    }}>
       {loadingTasks && (
         <div style={styles.tasksLoadingIndicator}>
           <div className="animate-spin" style={styles.microSpinner}></div>
@@ -1867,7 +1925,14 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
       </div>
 
       {/* Conteúdo Dinâmico conforme Tab Ativa */}
-      <div style={styles.tabContent}>
+      <div style={{
+        ...styles.tabContent,
+        flex: isMobile ? 'none' : 1,
+        minHeight: isMobile ? 'none' : 0,
+        display: isMobile ? 'block' : 'flex',
+        flexDirection: isMobile ? 'row' : 'column',
+        overflow: isMobile ? 'visible' : 'hidden'
+      }}>
         {activeTab === 'timeline' && renderTimelineView()}
         {activeTab === 'kanban' && renderKanbanView()}
         {activeTab === 'lista' && renderListaView()}
@@ -1881,6 +1946,8 @@ const styles = {
     display: 'flex',
     flexDirection: 'column',
     gap: '1.5rem',
+    height: '100%',
+    overflow: 'hidden',
   },
   header: {
     display: 'flex',
@@ -1969,6 +2036,11 @@ const styles = {
   },
   tabContent: {
     marginTop: '0.5rem',
+    display: 'flex',
+    flexDirection: 'column',
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
   },
   legendBar: {
     display: 'flex',
@@ -2009,6 +2081,11 @@ const styles = {
     borderRadius: '24px',
     padding: '1.5rem',
     boxShadow: '0 10px 40px rgba(0,0,0,0.03)',
+    display: 'flex',
+    flexDirection: 'column',
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
   },
   timelineControlBar: {
     display: 'flex',
@@ -2395,12 +2472,14 @@ const styles = {
     lineHeight: '1.3',
   },
 
-  // STYLES: Kanban Board
   kanbanContainer: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
     gap: '1rem',
     marginTop: '0.5rem',
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
   },
   kanbanColumn: {
     padding: '1rem',
@@ -2408,7 +2487,7 @@ const styles = {
     flexDirection: 'column',
     gap: '1rem',
     background: 'rgba(255, 255, 255, 0.2)',
-    maxHeight: '75vh',
+    height: '100%',
     overflowY: 'auto',
   },
   kanbanColumnHeader: {
@@ -2654,12 +2733,14 @@ const styles = {
     color: 'var(--text-muted)',
   },
 
-  // STYLES: Filtro Inteligente (Monthly Grid View)
   gridContainer: {
     padding: '1.5rem',
     display: 'flex',
     flexDirection: 'column',
     gap: '1.5rem',
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
   },
   gridFilterBar: {
     display: 'flex',
@@ -2676,10 +2757,13 @@ const styles = {
   },
   gridTableWrapper: {
     overflowX: 'auto',
+    overflowY: 'auto',
     borderRadius: '16px',
     border: '1px solid var(--glass-border)',
     background: 'rgba(255, 255, 255, 0.15)',
     boxShadow: 'var(--shadow-md)',
+    flex: 1,
+    minHeight: 0,
   },
   gridTable: {
     width: '100%',
