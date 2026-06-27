@@ -28,14 +28,17 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [timelineScrollTop, setTimelineScrollTop] = useState(0);
 
-  // Estados de offset dinâmicos para a Linha do Tempo
-  const [monthsStartOffset, setMonthsStartOffset] = useState(1);
-  const [monthsEndOffset, setMonthsEndOffset] = useState(1);
+  // Estado do mês central da Linha do Tempo (Mantém sempre 3 meses carregados)
+  const [centerMonthDate, setCenterMonthDate] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
 
   // Refs de controle de scroll e compensação
   const lastScrollHeightRef = useRef(0);
   const lastScrollTopRef = useRef(0);
   const shouldCompensateScrollRef = useRef(false);
+  const shiftDirectionRef = useRef(null);
 
   // Entidades auxiliares para mapear IDs para nomes
   const [empresas, setEmpresas] = useState([]);
@@ -126,12 +129,22 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   const animationFrameIdRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  const fetchTasks = async (companyId, csId, startOffset = monthsStartOffset, endOffset = monthsEndOffset) => {
+  const fetchTasks = async (companyId, csId, dateOrStartOffset = centerMonthDate, endOffset) => {
     try {
       setLoadingTasks(true);
-      const now = new Date();
-      const dateStart = new Date(now.getFullYear(), now.getMonth() - startOffset, 1).toISOString();
-      const dateEnd = new Date(now.getFullYear(), now.getMonth() + endOffset + 1, 1).toISOString();
+      let dateStart, dateEnd;
+
+      if (dateOrStartOffset instanceof Date) {
+        const centerDate = dateOrStartOffset;
+        dateStart = new Date(centerDate.getFullYear(), centerDate.getMonth() - 1, 1).toISOString();
+        dateEnd = new Date(centerDate.getFullYear(), centerDate.getMonth() + 2, 1).toISOString();
+      } else {
+        const startOffset = typeof dateOrStartOffset === 'number' ? dateOrStartOffset : 1;
+        const endOffsetVal = typeof endOffset === 'number' ? endOffset : 1;
+        const now = new Date();
+        dateStart = new Date(now.getFullYear(), now.getMonth() - startOffset, 1).toISOString();
+        dateEnd = new Date(now.getFullYear(), now.getMonth() + endOffsetVal + 1, 1).toISOString();
+      }
       
       const filters = {};
       if (companyId) filters.empresa_id = companyId;
@@ -176,7 +189,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
       setClasseServicos(csList);
       setPrestadores(prList);
       
-      await fetchTasks(selectedCompanyId, selectedClasseServicoId, monthsStartOffset, monthsEndOffset);
+      await fetchTasks(selectedCompanyId, selectedClasseServicoId, centerMonthDate);
     } catch (error) {
       console.error("Erro ao carregar dados do cronograma completo:", error);
     } finally {
@@ -203,10 +216,10 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
         const end = Math.max(monthsDiffEnd, 6);
         fetchTasks(selectedCompanyId, selectedClasseServicoId, start, end);
       } else {
-        fetchTasks(selectedCompanyId, selectedClasseServicoId, monthsStartOffset, monthsEndOffset);
+        fetchTasks(selectedCompanyId, selectedClasseServicoId, centerMonthDate);
       }
     }
-  }, [selectedCompanyId, selectedClasseServicoId, monthsStartOffset, monthsEndOffset, activeTab, gridYear, gridStartMonth, loading]);
+  }, [selectedCompanyId, selectedClasseServicoId, centerMonthDate, activeTab, gridYear, gridStartMonth, loading]);
 
   const handleScroll = (e) => {
     const container = e.currentTarget;
@@ -214,56 +227,41 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
     setTimelineScrollTop(container.scrollTop);
 
     if (loadingTasks || zoomedMonth) return;
-    const { scrollTop, scrollHeight, clientHeight } = container;
+    const { scrollTop, clientHeight } = container;
 
-    // Scroll para baixo: carrega próximos meses
-    if (scrollHeight - scrollTop - clientHeight < 150) {
-      setMonthsEndOffset(prev => prev + 1);
-    }
+    const ROW_HEIGHT = 230;
+    const centerIndex = Math.floor((scrollTop + clientHeight / 2) / ROW_HEIGHT);
 
-    // Scroll para cima: carrega meses anteriores
-    if (scrollTop < 80 && !shouldCompensateScrollRef.current) {
-      lastScrollHeightRef.current = scrollHeight;
+    if (centerIndex === 0 && !shouldCompensateScrollRef.current) {
       lastScrollTopRef.current = scrollTop;
+      shiftDirectionRef.current = 'up';
       shouldCompensateScrollRef.current = true;
-      setMonthsStartOffset(prev => prev + 1);
+      setCenterMonthDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+    } else if (centerIndex === 2 && !shouldCompensateScrollRef.current) {
+      lastScrollTopRef.current = scrollTop;
+      shiftDirectionRef.current = 'down';
+      shouldCompensateScrollRef.current = true;
+      setCenterMonthDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
     }
   };
 
   const handleWheel = (e) => {
-    if (loadingTasks || zoomedMonth) return;
-    const container = e.currentTarget;
-    if (!container) return;
-
-    const { scrollTop, scrollHeight, clientHeight } = container;
-
-    if (e.deltaY > 0) {
-      // Roda para baixo: incrementa meses futuros
-      if (scrollHeight - scrollTop - clientHeight < 150 || scrollHeight <= clientHeight) {
-        setMonthsEndOffset(prev => prev + 1);
-      }
-    } else if (e.deltaY < 0) {
-      // Roda para cima: incrementa meses passados
-      if (scrollTop < 80 || scrollHeight <= clientHeight) {
-        if (!shouldCompensateScrollRef.current) {
-          lastScrollHeightRef.current = scrollHeight;
-          lastScrollTopRef.current = scrollTop;
-          shouldCompensateScrollRef.current = true;
-          setMonthsStartOffset(prev => prev + 1);
-        }
-      }
-    }
+    // Shifting is automatically handled by the scroll event.
   };
 
   useLayoutEffect(() => {
     if (shouldCompensateScrollRef.current && containerRef.current) {
       const container = containerRef.current;
-      const newScrollHeight = container.scrollHeight;
-      const diff = newScrollHeight - lastScrollHeightRef.current;
-      container.scrollTop = lastScrollTopRef.current + diff;
+      const ROW_HEIGHT = 230;
+      if (shiftDirectionRef.current === 'up') {
+        container.scrollTop = lastScrollTopRef.current + ROW_HEIGHT;
+      } else if (shiftDirectionRef.current === 'down') {
+        container.scrollTop = lastScrollTopRef.current - ROW_HEIGHT;
+      }
       shouldCompensateScrollRef.current = false;
+      shiftDirectionRef.current = null;
     }
-  }, [monthsStartOffset]);
+  }, [centerMonthDate]);
 
   // Centraliza o scroll no mês atual ao entrar na linha do tempo
   useEffect(() => {
@@ -440,12 +438,14 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   };
 
   const handleResetCenter = () => {
+    const now = new Date();
+    const currentMonthDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    setCenterMonthDate(currentMonthDate);
+    
     if (containerRef.current) {
-      const currentMonthEl = document.getElementById('current-month-row');
-      const targetTop = currentMonthEl ? currentMonthEl.offsetTop - 45 : 0;
       containerRef.current.scrollTo({
         left: 150,
-        top: targetTop,
+        top: 230 - 45,
         behavior: 'smooth'
       });
     }
@@ -631,9 +631,8 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
     const currentYear = now.getFullYear();
 
     const allMonths = [];
-    const startDate = new Date(currentYear, currentMonth - monthsStartOffset, 1);
-    const totalMonthsRange = monthsStartOffset + monthsEndOffset + 1;
-    for (let i = 0; i < totalMonthsRange; i++) {
+    const startDate = new Date(centerMonthDate.getFullYear(), centerMonthDate.getMonth() - 1, 1);
+    for (let i = 0; i < 3; i++) {
       const d = new Date(startDate.getFullYear(), startDate.getMonth() + i, 1);
       const monthStr = d.toLocaleDateString('pt-BR', { month: 'long' });
       const capMonth = monthStr.charAt(0).toUpperCase() + monthStr.slice(1);
@@ -657,7 +656,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
 
     const containerStyle = {
       ...styles.timelineContainer,
-      maxHeight: isMobile ? 'none' : '75vh',
+      maxHeight: isMobile ? 'none' : '520px',
     };
 
     return (
@@ -819,22 +818,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
               </div>
             </div>
 
-            {/* Botão de Histórico Anterior */}
-            {!zoomedMonth && (
-              <div 
-                style={styles.loadMoreBar} 
-                onClick={() => {
-                  if (containerRef.current) {
-                    lastScrollHeightRef.current = containerRef.current.scrollHeight;
-                    lastScrollTopRef.current = containerRef.current.scrollTop;
-                  }
-                  shouldCompensateScrollRef.current = true;
-                  setMonthsStartOffset(prev => prev + 1);
-                }}
-              >
-                <span>↑ Carregar meses anteriores (Histórico) ↑</span>
-              </div>
-            )}
+
 
             {(() => {
               const ROW_HEIGHT = 230;
@@ -1305,23 +1289,8 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                     {mTasks.length === 0 && (
                       <div 
                         style={styles.emptyTrackLoadButton}
-                        onClick={() => {
-                          const now = new Date();
-                          const thisMonthDate = new Date(m.year, m.month, 1);
-                          if (thisMonthDate < new Date(now.getFullYear(), now.getMonth(), 1)) {
-                            if (containerRef.current) {
-                              lastScrollHeightRef.current = containerRef.current.scrollHeight;
-                              lastScrollTopRef.current = containerRef.current.scrollTop;
-                            }
-                            shouldCompensateScrollRef.current = true;
-                            setMonthsStartOffset(prev => prev + 1);
-                          } else {
-                            setMonthsEndOffset(prev => prev + 1);
-                          }
-                        }}
-                        className="card-hover"
                       >
-                        <span style={styles.emptyTrackText}>Sem tarefas neste mês. Clique para carregar mais dados.</span>
+                        <span style={styles.emptyTrackText}>Sem tarefas neste mês.</span>
                       </div>
                     )}
                   </div>
@@ -1333,15 +1302,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
         );
       })()}
             
-            {/* Botão de Meses Futuros */}
-            {!zoomedMonth && (
-              <div 
-                style={styles.loadMoreBar} 
-                onClick={() => setMonthsEndOffset(prev => prev + 1)}
-              >
-                <span>↓ Carregar meses futuros ↓</span>
-              </div>
-            )}
+
           </div>
         </div>
         )}
