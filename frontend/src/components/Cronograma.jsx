@@ -571,6 +571,9 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                     {isExpanded && (
                       <div style={styles.verticalCardExpandedContent} className="animate-fade-in">
                         <div style={styles.expandedField}>
+                          <strong>Vencimento:</strong> {new Date(t.data_vencimento).toLocaleDateString('pt-BR')}
+                        </div>
+                        <div style={styles.expandedField}>
                           <strong>Documento:</strong> {getDocumentoInfo(t.documento_id)}
                         </div>
                         <div style={styles.expandedField}>
@@ -632,8 +635,10 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
     const totalMonthsRange = monthsStartOffset + monthsEndOffset + 1;
     for (let i = 0; i < totalMonthsRange; i++) {
       const d = new Date(startDate.getFullYear(), startDate.getMonth() + i, 1);
+      const monthStr = d.toLocaleDateString('pt-BR', { month: 'long' });
+      const capMonth = monthStr.charAt(0).toUpperCase() + monthStr.slice(1);
       allMonths.push({
-        label: d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
+        label: `${capMonth} de ${d.getFullYear()}`,
         month: d.getMonth(),
         year: d.getFullYear(),
         key: `${d.getFullYear()}-${d.getMonth()}`
@@ -660,14 +665,27 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
         <div style={styles.timelineControlBar}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
             {zoomedMonth && (
-              <button 
-                onClick={() => setZoomedMonth(null)}
-                style={styles.backToAnnualBtn}
-                title="Voltar para visualização anual"
-              >
-                <ChevronLeft size={16} style={{ marginRight: '4px' }} />
-                <span>Ver Todos os Meses</span>
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <button 
+                  onClick={() => setZoomedMonth(null)}
+                  style={styles.backToAnnualBtn}
+                  title="Voltar para visualização anual"
+                >
+                  <ChevronLeft size={16} style={{ marginRight: '4px' }} />
+                  <span>Ver Todos os Meses</span>
+                </button>
+                <span style={{
+                  fontSize: '0.9rem',
+                  fontWeight: '600',
+                  color: 'var(--primary)',
+                  background: 'rgba(37, 99, 235, 0.08)',
+                  padding: '4px 12px',
+                  borderRadius: '20px',
+                  border: '1px solid rgba(37, 99, 235, 0.2)',
+                }}>
+                  {zoomedMonth.label}
+                </span>
+              </div>
             )}
             {/* Filtro de Empresa no Cabeçalho */}
             {user.role !== 'cliente' && (
@@ -901,6 +919,9 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                             Semana {wIdx + 1}
                           </span>
                         </div>
+                        <span style={{ ...styles.monthTaskCount, fontWeight: '600', color: 'var(--text-main)' }}>
+                          {m.label}
+                        </span>
                         <span style={styles.monthTaskCount}>
                           Dias {startDay} - {endDay}
                         </span>
@@ -1062,6 +1083,9 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                                 {isHovered && (
                                   <div style={styles.expandedDetails} className="animate-fade-in">
                                     <div style={styles.detailDivider}></div>
+                                    <div style={styles.expandedField}>
+                                      <strong>Vencimento:</strong> {new Date(t.data_vencimento).toLocaleDateString('pt-BR')}
+                                    </div>
                                     <div style={styles.expandedField}>
                                       <strong>Documento:</strong> {getDocumentoInfo(t.documento_id)}
                                     </div>
@@ -1251,6 +1275,9 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                             {isHovered && (
                               <div style={styles.expandedDetails} className="animate-fade-in">
                                 <div style={styles.detailDivider}></div>
+                                <div style={styles.expandedField}>
+                                  <strong>Vencimento:</strong> {new Date(t.data_vencimento).toLocaleDateString('pt-BR')}
+                                </div>
                                 <div style={styles.expandedField}>
                                   <strong>Documento:</strong> {getDocumentoInfo(t.documento_id)}
                                 </div>
@@ -2217,7 +2244,7 @@ const styles = {
     position: 'relative',
   },
   monthStickyHeader: {
-    width: '160px',
+    width: '180px',
     height: '100%',
     display: 'flex',
     flexDirection: 'column',
@@ -2233,7 +2260,6 @@ const styles = {
   },
   monthLabelText: {
     fontSize: '0.85rem',
-    textTransform: 'capitalize',
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
