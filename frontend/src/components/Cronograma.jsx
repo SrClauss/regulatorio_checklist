@@ -20,8 +20,131 @@ import {
   ChevronDown,
   Info,
   Maximize2,
-  Minimize2
+  Minimize2,
+  ZoomIn,
+  ZoomOut
 } from 'lucide-react';
+
+const MultiSelectDropdown = ({ label, options, selectedValues, onChange, placeholder }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleToggleOption = (val) => {
+    if (selectedValues.includes(val)) {
+      onChange(selectedValues.filter(v => v !== val));
+    } else {
+      onChange([...selectedValues, val]);
+    }
+  };
+
+  const selectedLabels = options
+    .filter(opt => selectedValues.includes(opt.value))
+    .map(opt => opt.label);
+
+  const displayValue = selectedLabels.length === 0 
+    ? placeholder 
+    : selectedLabels.length <= 2 
+      ? selectedLabels.join(', ') 
+      : `${selectedLabels.length} selecionados`;
+
+  return (
+    <div ref={dropdownRef} style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: '2px', textAlign: 'left' }}>
+      <span style={{ fontSize: '0.7rem', fontWeight: '700', color: 'var(--text-muted)' }}>{label}</span>
+      <div 
+        onClick={() => setIsOpen(!isOpen)}
+        className="glass-input"
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '4px 8px',
+          borderRadius: '8px',
+          border: '1px solid var(--glass-border)',
+          background: 'rgba(255, 255, 255, 0.65)',
+          fontSize: '0.75rem',
+          cursor: 'pointer',
+          minWidth: '150px',
+          maxWidth: '220px',
+          height: '26px',
+          userSelect: 'none',
+          color: selectedValues.length === 0 ? 'var(--text-muted)' : 'var(--text-main)',
+        }}
+      >
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+          {displayValue}
+        </span>
+        <ChevronDown size={12} style={{ marginLeft: '4px', transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+      </div>
+
+      {isOpen && (
+        <div style={{
+          position: 'absolute',
+          top: '100%',
+          left: 0,
+          zIndex: 10010,
+          background: 'rgba(255, 255, 255, 0.98)',
+          backdropFilter: 'blur(16px)',
+          border: '1px solid rgba(0,0,0,0.12)',
+          borderRadius: '8px',
+          boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
+          marginTop: '4px',
+          padding: '4px 0',
+          minWidth: '200px',
+          maxHeight: '220px',
+          overflowY: 'auto',
+        }}>
+          {options.length === 0 ? (
+            <div style={{ padding: '8px 12px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Nenhuma opção</div>
+          ) : (
+            options.map(opt => {
+              const isChecked = selectedValues.includes(opt.value);
+              return (
+                <div 
+                  key={opt.value}
+                  onClick={() => handleToggleOption(opt.value)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '6px 12px',
+                    fontSize: '0.75rem',
+                    cursor: 'pointer',
+                    background: isChecked ? 'rgba(37, 99, 235, 0.06)' : 'transparent',
+                    color: isChecked ? 'var(--primary)' : 'var(--text-main)',
+                    fontWeight: isChecked ? '600' : 'normal',
+                    transition: 'background 0.15s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.03)'}
+                  onMouseLeave={e => e.currentTarget.style.background = isChecked ? 'rgba(37, 99, 235, 0.06)' : 'transparent'}
+                >
+                  <input 
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => {}} 
+                    style={{ pointerEvents: 'none', cursor: 'pointer' }}
+                  />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {opt.label}
+                  </span>
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
 export default function Cronograma({ user, onViewTask, onViewDocument, onNavigateTab }) {
   const [activeTab, setActiveTab] = useState('planilha'); // 'planilha', 'timeline', 'lista'
@@ -47,7 +170,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   });
 
   // Novos filtros solicitados pelo usuário
-  const [selectedDocumentId, setSelectedDocumentId] = useState('');
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState([]);
   const [minValor, setMinValor] = useState('');
   const [maxValor, setMaxValor] = useState('');
 
@@ -78,8 +201,8 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   const [classeServicos, setClasseServicos] = useState([]);
   const [prestadores, setPrestadores] = useState([]);
 
-  const [selectedClasseServicoId, setSelectedClasseServicoId] = useState(null);
-  const [selectedCompanyId, setSelectedCompanyId] = useState('');
+  const [selectedClasseServicoIds, setSelectedClasseServicoIds] = useState([]);
+  const [selectedCompanyIds, setSelectedCompanyIds] = useState([]);
   const [zoomedMonth, setZoomedMonth] = useState(null); // null ou { month: number, year: number, label: string, key: string }
 
   // Estado de Busca e Filtro da Aba Lista Analítica (Filtro Inteligente)
@@ -187,7 +310,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   const animationFrameIdRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  const fetchTasks = async (companyId, csId, dateOrStartOffset = centerMonthDate, endOffset) => {
+  const fetchTasks = async (dateOrStartOffset = centerMonthDate, endOffset) => {
     try {
       setLoadingTasks(true);
       let dateStart, dateEnd;
@@ -209,18 +332,12 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
         dateEnd = new Date(now.getFullYear(), now.getMonth() + endOffsetVal + 1, 1).toISOString();
       }
       
-      const filters = {};
-      if (companyId) filters.empresa_id = companyId;
-      if (csId) filters.classe_servico_id = csId;
-      
       const [timelineTasks, overdueTasks] = await Promise.all([
         api.listTarefas({
-          ...filters,
           data_inicio: dateStart,
           data_fim: dateEnd
         }),
         api.listTarefas({
-          ...filters,
           status: 'Atrasado'
         })
       ]);
@@ -252,7 +369,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
       setClasseServicos(csList);
       setPrestadores(prList);
       
-      await fetchTasks(selectedCompanyId, selectedClasseServicoId, centerMonthDate);
+      await fetchTasks(centerMonthDate);
     } catch (error) {
       console.error("Erro ao carregar dados do cronograma completo:", error);
     } finally {
@@ -267,7 +384,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   useEffect(() => {
     if (!loading) {
       if (activeTab === 'planilha') {
-        fetchTasks(selectedCompanyId, selectedClasseServicoId, planilhaDataInicio, planilhaDataFim);
+        fetchTasks(planilhaDataInicio, planilhaDataFim);
       } else if (activeTab === 'lista') {
         const now = new Date();
         const startOfGrid = new Date(gridYear, gridStartMonth, 1);
@@ -279,12 +396,12 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
         
         const start = Math.max(monthsDiffStart, 1);
         const end = Math.max(monthsDiffEnd, 6);
-        fetchTasks(selectedCompanyId, selectedClasseServicoId, start, end);
+        fetchTasks(start, end);
       } else {
-        fetchTasks(selectedCompanyId, selectedClasseServicoId, centerMonthDate);
+        fetchTasks(centerMonthDate);
       }
     }
-  }, [selectedCompanyId, selectedClasseServicoId, centerMonthDate, activeTab, gridYear, gridStartMonth, planilhaDataInicio, planilhaDataFim, loading]);
+  }, [centerMonthDate, activeTab, gridYear, gridStartMonth, planilhaDataInicio, planilhaDataFim, loading]);
 
   const handleScroll = (e) => {
     const container = e.currentTarget;
@@ -519,14 +636,14 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
 
   const tasksFiltered = useMemo(() => {
     return todasTarefas.filter(t => {
-      if (selectedClasseServicoId && t.classe_servico_id !== selectedClasseServicoId) return false;
-      if (selectedCompanyId && t.empresa_id !== selectedCompanyId) return false;
-      if (selectedDocumentId && t.documento_id !== selectedDocumentId) return false;
+      if (selectedClasseServicoIds.length > 0 && !selectedClasseServicoIds.includes(t.classe_servico_id)) return false;
+      if (selectedCompanyIds.length > 0 && !selectedCompanyIds.includes(t.empresa_id)) return false;
+      if (selectedDocumentIds.length > 0 && !selectedDocumentIds.includes(t.documento_id)) return false;
       if (minValor !== '' && (t.valor_estimado === undefined || t.valor_estimado === null || Number(t.valor_estimado) < Number(minValor))) return false;
       if (maxValor !== '' && (t.valor_estimado === undefined || t.valor_estimado === null || Number(t.valor_estimado) > Number(maxValor))) return false;
       return true;
     });
-  }, [todasTarefas, selectedClasseServicoId, selectedCompanyId, selectedDocumentId, minValor, maxValor]);
+  }, [todasTarefas, selectedClasseServicoIds, selectedCompanyIds, selectedDocumentIds, minValor, maxValor]);
 
   // --- HOOKS DA PLANILHA OPERACIONAL ---
   const planilhaColumns = useMemo(() => {
@@ -635,6 +752,42 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   };
 
 
+
+  const handleZoomOut = () => {
+    const start = new Date(planilhaDataInicio + 'T00:00:00');
+    const end = new Date(planilhaDataFim + 'T00:00:00');
+    
+    // Zoom out: expande 1 mês para o início e 1 mês para o fim
+    start.setMonth(start.getMonth() - 1);
+    end.setMonth(end.getMonth() + 1);
+    
+    const startStr = start.toISOString().split('T')[0];
+    const endStr = end.toISOString().split('T')[0];
+    
+    setPlanilhaDataInicio(startStr);
+    setPlanilhaDataFim(endStr);
+    localStorage.setItem('planilha_data_inicio', startStr);
+    localStorage.setItem('planilha_data_fim', endStr);
+  };
+
+  const handleZoomIn = () => {
+    const start = new Date(planilhaDataInicio + 'T00:00:00');
+    const end = new Date(planilhaDataFim + 'T00:00:00');
+    
+    // Zoom in: contrai 1 mês de cada lado
+    start.setMonth(start.getMonth() + 1);
+    end.setMonth(end.getMonth() - 1);
+    
+    if (start <= end) {
+      const startStr = start.toISOString().split('T')[0];
+      const endStr = end.toISOString().split('T')[0];
+      
+      setPlanilhaDataInicio(startStr);
+      setPlanilhaDataFim(endStr);
+      localStorage.setItem('planilha_data_inicio', startStr);
+      localStorage.setItem('planilha_data_fim', endStr);
+    }
+  };
 
   const handleResetPlanilhaDates = () => {
     const defaults = getPlanilhaDefaultDates();
@@ -893,13 +1046,13 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
               <span>{planilhaFullScreen ? 'Sair da Tela Inteira' : 'Tela Inteira'}</span>
             </button>
 
-            {(selectedCompanyId || selectedClasseServicoId || selectedDocumentId || minValor || maxValor) && (
+            {(selectedCompanyIds.length > 0 || selectedClasseServicoIds.length > 0 || selectedDocumentIds.length > 0 || minValor || maxValor) && (
               <button 
                 style={styles.clearFilterHeaderBtn} 
                 onClick={() => {
-                  setSelectedCompanyId('');
-                  setSelectedClasseServicoId(null);
-                  setSelectedDocumentId('');
+                  setSelectedCompanyIds([]);
+                  setSelectedClasseServicoIds([]);
+                  setSelectedDocumentIds([]);
                   setMinValor('');
                   setMaxValor('');
                 }}
@@ -946,14 +1099,32 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                 />
               </div>
               
-              <div style={{ display: 'flex', gap: '4px' }}>
+              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
                 <button 
                   onClick={handleResetPlanilhaDates} 
                   style={{ ...styles.actionPlanilhaBtn, fontSize: '0.7rem', padding: '4px 8px', fontWeight: 'bold' }} 
                   title="Restaurar período padrão de 4 meses"
                 >
-                  Período Padrão (4 Meses)
+                  Padrão (4M)
                 </button>
+                {planilhaFullScreen && (
+                  <>
+                    <button 
+                      onClick={handleZoomOut} 
+                      style={styles.actionPlanilhaBtn} 
+                      title="Zoom Out (Expandir Meses)"
+                    >
+                      <ZoomOut size={14} />
+                    </button>
+                    <button 
+                      onClick={handleZoomIn} 
+                      style={styles.actionPlanilhaBtn} 
+                      title="Zoom In (Contrair Meses)"
+                    >
+                      <ZoomIn size={14} />
+                    </button>
+                  </>
+                )}
               </div>
             </div>
 
@@ -986,47 +1157,29 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
 
           {/* Linha 2: Entidades (Cliente, Serviço, Documento) */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-            <div style={styles.filterGroup}>
-              <label style={styles.filterLabel}>Cliente:</label>
-              <select 
-                style={{ ...styles.listSelect, padding: '4px 8px', fontSize: '0.75rem', minWidth: '150px' }}
-                value={selectedCompanyId || ''}
-                onChange={(e) => setSelectedCompanyId(e.target.value || '')}
-              >
-                <option value="">Todos os Clientes</option>
-                {empresas.map(e => (
-                  <option key={e._id} value={e._id}>{e.nome_fantasia}</option>
-                ))}
-              </select>
-            </div>
+            <MultiSelectDropdown 
+              label="Cliente:"
+              options={empresas.map(e => ({ value: e._id, label: e.nome_fantasia }))}
+              selectedValues={selectedCompanyIds}
+              onChange={setSelectedCompanyIds}
+              placeholder="Todos os Clientes"
+            />
 
-            <div style={styles.filterGroup}>
-              <label style={styles.filterLabel}>Serviço:</label>
-              <select 
-                style={{ ...styles.listSelect, padding: '4px 8px', fontSize: '0.75rem', minWidth: '150px' }}
-                value={selectedClasseServicoId || ''}
-                onChange={(e) => setSelectedClasseServicoId(e.target.value || null)}
-              >
-                <option value="">Todos os Serviços</option>
-                {classeServicos.map(cs => (
-                  <option key={cs._id} value={cs._id}>{cs.nome}</option>
-                ))}
-              </select>
-            </div>
+            <MultiSelectDropdown 
+              label="Serviço:"
+              options={classeServicos.map(cs => ({ value: cs._id, label: cs.nome }))}
+              selectedValues={selectedClasseServicoIds}
+              onChange={setSelectedClasseServicoIds}
+              placeholder="Todos os Serviços"
+            />
 
-            <div style={styles.filterGroup}>
-              <label style={styles.filterLabel}>Documento:</label>
-              <select 
-                style={{ ...styles.listSelect, padding: '4px 8px', fontSize: '0.75rem', minWidth: '180px' }}
-                value={selectedDocumentId || ''}
-                onChange={(e) => setSelectedDocumentId(e.target.value || '')}
-              >
-                <option value="">Todos os Documentos</option>
-                {documentos.map(d => (
-                  <option key={d._id} value={d._id}>{d.tipo} {d.numero ? `(${d.numero})` : ''}</option>
-                ))}
-              </select>
-            </div>
+            <MultiSelectDropdown 
+              label="Documento:"
+              options={documentos.map(d => ({ value: d._id, label: `${d.tipo} ${d.numero ? `(${d.numero})` : ''}` }))}
+              selectedValues={selectedDocumentIds}
+              onChange={setSelectedDocumentIds}
+              placeholder="Todos os Documentos"
+            />
           </div>
         </div>
 
@@ -1240,44 +1393,30 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
             )}
             {/* Filtro de Empresa no Cabeçalho */}
             {user.role !== 'cliente' && (
-              <div style={styles.filterGroup}>
-                <label style={styles.filterLabel}>Empresa:</label>
-                <select
-                  value={selectedCompanyId || ''}
-                  onChange={(e) => setSelectedCompanyId(e.target.value || '')}
-                  className="glass-input glass-select"
-                  style={styles.headerSelect}
-                >
-                  <option value="">Todas as Empresas</option>
-                  {empresas.map(emp => (
-                    <option key={emp._id} value={emp._id}>{emp.nome_fantasia}</option>
-                  ))}
-                </select>
-              </div>
+              <MultiSelectDropdown 
+                label="Empresa:"
+                options={empresas.map(emp => ({ value: emp._id, label: emp.nome_fantasia }))}
+                selectedValues={selectedCompanyIds}
+                onChange={setSelectedCompanyIds}
+                placeholder="Todas as Empresas"
+              />
             )}
 
             {/* Filtro de Classe de Serviço no Cabeçalho */}
-            <div style={styles.filterGroup}>
-              <label style={styles.filterLabel}>Classe:</label>
-              <select
-                value={selectedClasseServicoId || ''}
-                onChange={(e) => setSelectedClasseServicoId(e.target.value || null)}
-                className="glass-input glass-select"
-                style={styles.headerSelect}
-              >
-                <option value="">Todas as Classes</option>
-                {classeServicos.map(cs => (
-                  <option key={cs._id} value={cs._id}>{cs.nome}</option>
-                ))}
-              </select>
-            </div>
+            <MultiSelectDropdown 
+              label="Classe:"
+              options={classeServicos.map(cs => ({ value: cs._id, label: cs.nome }))}
+              selectedValues={selectedClasseServicoIds}
+              onChange={setSelectedClasseServicoIds}
+              placeholder="Todas as Classes"
+            />
 
-            {(selectedClasseServicoId || selectedCompanyId) && (
+            {(selectedClasseServicoIds.length > 0 || selectedCompanyIds.length > 0) && (
               <button 
                 style={styles.clearFilterHeaderBtn} 
                 onClick={() => {
-                  setSelectedClasseServicoId(null);
-                  setSelectedCompanyId('');
+                  setSelectedClasseServicoIds([]);
+                  setSelectedCompanyIds([]);
                 }}
               >
                 <X size={12} />
@@ -2460,7 +2599,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                 e.stopPropagation();
                 try {
                   await api.updateTarefa(task._id, { status: 'Concluído', data_conclusao: new Date().toISOString() });
-                  await fetchTasks(selectedCompanyId, selectedClasseServicoId, planilhaDataInicio, planilhaDataFim);
+                  await fetchTasks(planilhaDataInicio, planilhaDataFim);
                 } catch (err) {
                   console.error("Erro ao concluir tarefa via tooltip:", err);
                 }
