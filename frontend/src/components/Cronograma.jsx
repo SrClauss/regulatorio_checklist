@@ -18,11 +18,14 @@ import {
   SlidersHorizontal,
   TrendingUp,
   ChevronDown,
-  Info
+  Info,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 
 export default function Cronograma({ user, onViewTask, onViewDocument, onNavigateTab }) {
   const [activeTab, setActiveTab] = useState('planilha'); // 'planilha', 'timeline', 'lista'
+  const [planilhaFullScreen, setPlanilhaFullScreen] = useState(false);
 
   // Auxiliar para obter o período de meses padrão
   const getPlanilhaDefaultDates = () => {
@@ -647,8 +650,8 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
     }
     const rect = event.currentTarget.getBoundingClientRect();
     const position = {
-      top: rect.bottom + window.scrollY,
-      left: rect.left + window.scrollX
+      top: rect.bottom,
+      left: rect.left
     };
     planilhaHoverTimerRef.current = setTimeout(() => {
       setHoveredTaskForTooltip({ task, position });
@@ -835,15 +838,31 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   const renderPlanilhaView = () => {
     let globalRowIndex = 0;
     
+    const fullScreenStyle = planilhaFullScreen ? {
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      width: '100vw',
+      height: '100vh',
+      zIndex: 9990,
+      background: 'var(--bg-main, #f8fafc)',
+      padding: '1.5rem',
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: 'hidden',
+      borderRadius: 0,
+      border: 'none',
+    } : {
+      ...styles.planilhaContainer,
+      flex: isMobile ? 'none' : 1,
+      minHeight: isMobile ? 'none' : 0,
+      display: 'flex',
+      flexDirection: 'column',
+      overflow: isMobile ? 'visible' : 'hidden'
+    };
+
     return (
-      <div className="glass-panel animate-fade-in" style={{
-        ...styles.planilhaContainer,
-        flex: isMobile ? 'none' : 1,
-        minHeight: isMobile ? 'none' : 0,
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: isMobile ? 'visible' : 'hidden'
-      }}>
+      <div className="glass-panel animate-fade-in" style={fullScreenStyle}>
         {/* Barra superior de título */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.75rem' }}>
           <div>
@@ -851,7 +870,29 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
             <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Visão panorâmica e compacta das condicionantes e seus valores.</p>
           </div>
           
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <button 
+              onClick={() => setPlanilhaFullScreen(!planilhaFullScreen)} 
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                padding: '0.4rem 0.8rem',
+                borderRadius: '8px',
+                fontSize: '0.75rem',
+                fontWeight: '600',
+                cursor: 'pointer',
+                background: 'rgba(37, 99, 235, 0.1)',
+                color: 'var(--primary)',
+                border: '1px solid rgba(37, 99, 235, 0.2)',
+                transition: 'all 0.2s',
+              }}
+              title={planilhaFullScreen ? "Sair do modo tela inteira" : "Ver planilha em tela inteira"}
+            >
+              {planilhaFullScreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+              <span>{planilhaFullScreen ? 'Sair da Tela Inteira' : 'Tela Inteira'}</span>
+            </button>
+
             {(selectedCompanyId || selectedClasseServicoId || selectedDocumentId || minValor || maxValor) && (
               <button 
                 style={styles.clearFilterHeaderBtn} 
@@ -2354,10 +2395,10 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
     const prestadorNome = getPrestadorNome(task.classe_servico_id) || 'Não designado';
     
     const tooltipStyle = {
-      position: 'absolute',
+      position: 'fixed',
       top: `${position.top + 8}px`,
       left: `${Math.min(position.left, window.innerWidth - 320)}px`,
-      zIndex: 9999,
+      zIndex: 10005,
       width: '300px',
       background: 'rgba(255, 255, 255, 0.95)',
       backdropFilter: 'blur(16px)',
