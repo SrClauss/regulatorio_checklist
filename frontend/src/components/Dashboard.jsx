@@ -674,7 +674,12 @@ export default function Dashboard({ user, onNavigateTab }) {
               <span style={{ color: 'var(--text-light)', fontSize: '0.78rem' }}>
                 Concluídas: {periodMetrics.concluidas} de {periodMetrics.total}
               </span>
-            </div>      {/* 1. SEÇÃO OPERACIONAL: Ações Críticas & Agrupamento por Classes */}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 1. SEÇÃO OPERACIONAL: Ações Críticas & Agrupamento por Classes */}
       <div style={styles.dashboardBodyRow}>
         
         {/* Ações Críticas (flex: 1.2) */}
