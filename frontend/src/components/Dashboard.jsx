@@ -867,28 +867,33 @@ export default function Dashboard({ user, onNavigateTab }) {
       {/* 2. SEÇÃO DE PRINCIPAIS CONDICIONANTES (LINHA INTEIRA) */}
       <div style={{ ...styles.dashboardBodyRow, marginTop: '1.5rem' }}>
         <div style={{ ...styles.column, flex: 1 }}>
-          <div className="glass-panel" style={{ ...styles.panel, height: '340px', justifyContent: 'space-between' }}>
-            <div>
-              <div style={styles.panelHeader}>
-                <Award size={20} color="var(--primary)" />
-                <h3 style={styles.panelTitle}>Principais Condicionantes</h3>
-              </div>
-              <p style={styles.panelDescription}>
-                Distribuição das condicionantes mais frequentes no período ({selectedPeriod}).
-              </p>
+          <div className="glass-panel" style={{ ...styles.panel, height: '340px', justifyContent: 'flex-start' }}>
+            <div style={styles.panelHeader}>
+              <Award size={20} color="var(--primary)" />
+              <h3 style={styles.panelTitle}>Principais Condicionantes</h3>
             </div>
             
             <div style={{
               display: 'flex',
+              flexDirection: 'row',
               alignItems: 'center',
-              justifyContent: 'flex-start',
-              gap: '4rem',
-              padding: '1rem 2rem',
-              flex: 1
+              justifyContent: 'space-between',
+              gap: '3rem',
+              padding: '0.5rem 1.5rem',
+              flex: 1,
+              minHeight: 0
             }}>
               {topCondicionantesPieData.total > 0 ? (
                 <>
-                  <div style={{ position: 'relative', width: '180px', height: '180px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <div style={{ 
+                    position: 'relative', 
+                    width: '220px', 
+                    height: '220px', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    flexShrink: 0 
+                  }}>
                     <svg viewBox="0 0 100 100" style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }}>
                       {topCondicionantesPieData.slices.map((slice, idx) => {
                         const pathData = getSlicePath(slice.startPercent, slice.endPercent);
@@ -897,11 +902,15 @@ export default function Dashboard({ user, onNavigateTab }) {
                             key={idx}
                             d={pathData}
                             fill={pieColors[idx % pieColors.length]}
-                            style={{ transition: 'all 0.3s ease' }}
+                            style={{ 
+                              transition: 'all 0.3s ease',
+                              cursor: 'pointer'
+                            }}
+                            title={`${slice.name}: ${slice.value}`}
                           />
                         );
                       })}
-                      <circle cx="50" cy="50" r="26" fill="var(--card-bg, #ffffff)" />
+                      <circle cx="50" cy="50" r="28" fill="var(--card-bg, #ffffff)" />
                     </svg>
                     <div style={{
                       position: 'absolute',
@@ -911,10 +920,10 @@ export default function Dashboard({ user, onNavigateTab }) {
                       justifyContent: 'center',
                       pointerEvents: 'none'
                     }}>
-                      <span style={{ fontSize: '1.8rem', fontWeight: '800', color: 'var(--text-main)', lineHeight: 1 }}>
+                      <span style={{ fontSize: '2rem', fontWeight: '800', color: 'var(--text-main)', lineHeight: 1 }}>
                         {topCondicionantesPieData.total}
                       </span>
-                      <span style={{ fontSize: '0.65rem', color: 'var(--text-light)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: '2px' }}>
+                      <span style={{ fontSize: '0.65rem', color: 'var(--text-light)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: '4px' }}>
                         Total
                       </span>
                     </div>
@@ -923,8 +932,9 @@ export default function Dashboard({ user, onNavigateTab }) {
                   <div style={{
                     flex: 1,
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-                    gap: '0.75rem',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                    gap: '1rem',
+                    minWidth: 0,
                     alignContent: 'center'
                   }}>
                     {topCondicionantesPieData.slices.map((slice, idx) => (
@@ -932,17 +942,19 @@ export default function Dashboard({ user, onNavigateTab }) {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        gap: '0.8rem',
+                        gap: '0.75rem',
                         fontSize: '0.82rem',
-                        padding: '0.4rem 0.6rem',
+                        padding: '0.6rem 0.8rem',
                         background: 'rgba(255, 255, 255, 0.02)',
-                        borderRadius: '6px',
-                        border: '1px solid rgba(255, 255, 255, 0.04)'
+                        borderRadius: '8px',
+                        border: '1px solid rgba(255, 255, 255, 0.05)',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+                        minWidth: 0
                       }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0, flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', minWidth: 0, flex: 1 }}>
                           <div style={{
-                            width: '8px',
-                            height: '8px',
+                            width: '10px',
+                            height: '10px',
                             borderRadius: '50%',
                             backgroundColor: pieColors[idx % pieColors.length],
                             flexShrink: 0
@@ -957,7 +969,7 @@ export default function Dashboard({ user, onNavigateTab }) {
                             {slice.name}
                           </span>
                         </div>
-                        <span style={{ color: 'var(--text-muted)', fontWeight: '700', flexShrink: 0 }}>
+                        <span style={{ color: 'var(--text-muted)', fontWeight: '700', flexShrink: 0, marginLeft: '0.5rem' }}>
                           {slice.value} <span style={{ fontSize: '0.7rem', fontWeight: '500', color: 'var(--text-light)' }}>({Math.round(slice.percent * 100)}%)</span>
                         </span>
                       </div>
@@ -965,7 +977,7 @@ export default function Dashboard({ user, onNavigateTab }) {
                   </div>
                 </>
               ) : (
-                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem', width: '100%' }}>
                   Nenhuma condicionante no período
                 </div>
               )}
