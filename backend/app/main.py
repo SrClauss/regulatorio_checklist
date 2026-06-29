@@ -12,7 +12,7 @@ ENCODERS_BY_TYPE[ObjectId] = str
 ENCODERS_BY_TYPE[PyObjectId] = str
 
 from app.database import connect_to_mongo, close_mongo_connection
-from app.routes import auth, usuarios, empresas, templates, documentos, tarefas, previsibilidade, notificacoes, prestadores, classe_servicos
+from app.routes import auth, usuarios, empresas, templates, documentos, tarefas, previsibilidade, notificacoes, prestadores
 
 # Configura o ciclo de vida (lifespan) da aplicação para conexões MongoDB
 @asynccontextmanager
@@ -59,7 +59,6 @@ app.include_router(tarefas.router)
 app.include_router(previsibilidade.router)
 app.include_router(notificacoes.router)
 app.include_router(prestadores.router)
-app.include_router(classe_servicos.router)
 
 @app.get("/")
 async def root():

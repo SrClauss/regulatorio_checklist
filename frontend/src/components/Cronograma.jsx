@@ -368,8 +368,8 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
       ]);
       
       const mergedMap = {};
-      timelineTasks.forEach(t => mergedMap[t._id] = t);
-      overdueTasks.forEach(t => mergedMap[t._id] = t);
+      timelineTasks.forEach(t => mergedMap[t._id] = { ...t, classe_servico_id: t.prestador_id });
+      overdueTasks.forEach(t => mergedMap[t._id] = { ...t, classe_servico_id: t.prestador_id });
       
       setTodasTarefas(Object.values(mergedMap));
     } catch (error) {
@@ -382,16 +382,15 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   const fetchCronogramaData = async () => {
     try {
       setLoading(true);
-      const [empList, docList, csList, prList] = await Promise.all([
+      const [empList, docList, prList] = await Promise.all([
         api.listEmpresas(),
         api.listDocumentos(),
-        api.listClasseServicos(),
         api.listPrestadores()
       ]);
 
       setEmpresas(empList);
       setDocumentos(docList);
-      setClasseServicos(csList);
+      setClasseServicos(prList.map(p => ({ _id: p._id, nome: p.nome, prestador_id: p._id })));
       setPrestadores(prList);
       
       await fetchTasks(centerMonthDate);

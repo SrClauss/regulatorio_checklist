@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../api';
-import { Plus, Building, FileText, Settings, ShieldAlert, Check, User, Briefcase, Trash2, Edit } from 'lucide-react';
+import { Plus, Building, FileText, Settings, ShieldAlert, Check, User, Trash2, Edit } from 'lucide-react';
 
 export default function Cadastros({ user }) {
   const [activeSubTab, setActiveSubTab] = useState('empresas');
@@ -11,7 +11,6 @@ export default function Cadastros({ user }) {
   const [templates, setTemplates] = useState([]);
   const [consultores, setConsultores] = useState([]);
   const [prestadores, setPrestadores] = useState([]);
-  const [classeServicos, setClasseServicos] = useState([]);
   
   // Estados de Formulário
   const [empresaForm, setEmpresaForm] = useState({ razao_social: '', nome_fantasia: '', cnpj: '', cidade: '', uf: 'SP', segmento: 'Farmácia', responsavel_principal_id: '' });
@@ -21,9 +20,6 @@ export default function Cadastros({ user }) {
   
   const [prestadorForm, setPrestadorForm] = useState({ nome: '', cnpj: '', contato: '', ativo: true });
   const [editingPrestadorId, setEditingPrestadorId] = useState(null);
-  
-  const [classeServicoForm, setClasseServicoForm] = useState({ nome: '', descricao: '', prestador_id: '', ativo: true });
-  const [editingClasseServicoId, setEditingClasseServicoId] = useState(null);
   
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -46,9 +42,6 @@ export default function Cadastros({ user }) {
 
       const pList = await api.listPrestadores();
       setPrestadores(pList);
-
-      const csList = await api.listClasseServicos();
-      setClasseServicos(csList);
 
       // Valores default para forms
       if (cList.length > 0) {
@@ -208,53 +201,6 @@ export default function Cadastros({ user }) {
     }
   };
 
-  // Submissão - Classe de Serviço
-  const handleClasseServicoSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const payload = {
-        ...classeServicoForm,
-        prestador_id: classeServicoForm.prestador_id || null
-      };
-      if (editingClasseServicoId) {
-        await api.updateClasseServico(editingClasseServicoId, payload);
-        showFeedback(true, 'Classe de serviço atualizada com sucesso!');
-        setEditingClasseServicoId(null);
-      } else {
-        await api.createClasseServico(payload);
-        showFeedback(true, 'Classe de serviço cadastrada com sucesso!');
-      }
-      setClasseServicoForm({ nome: '', descricao: '', prestador_id: '', ativo: true });
-      fetchDados();
-    } catch (err) {
-      showFeedback(false, err.message || 'Erro ao salvar classe de serviço.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleEditClasseServico = (cs) => {
-    setEditingClasseServicoId(cs._id);
-    setClasseServicoForm({
-      nome: cs.nome,
-      descricao: cs.descricao || '',
-      prestador_id: cs.prestador_id || '',
-      ativo: cs.ativo ?? true
-    });
-  };
-
-  const handleDeleteClasseServico = async (id) => {
-    if (!window.confirm('Tem certeza que deseja inativar esta classe de serviço?')) return;
-    try {
-      await api.deleteClasseServico(id);
-      showFeedback(true, 'Classe de serviço inativada com sucesso!');
-      fetchDados();
-    } catch (err) {
-      showFeedback(false, err.message || 'Erro ao inativar classe de serviço.');
-    }
-  };
-
   const getConsultorNome = (id) => {
     const found = consultores.find(c => c._id === id);
     return found ? found.nome : 'Nenhum';
@@ -294,12 +240,6 @@ export default function Cadastros({ user }) {
           style={{ ...styles.tabBtn, ...(activeSubTab === 'prestadores' ? styles.tabBtnActive : {}) }}
         >
           <User size={16} /> Prestadores de Serviço
-        </button>
-        <button 
-          onClick={() => setActiveSubTab('classe_servicos')}
-          style={{ ...styles.tabBtn, ...(activeSubTab === 'classe_servicos' ? styles.tabBtnActive : {}) }}
-        >
-          <Briefcase size={16} /> Classes de Serviço
         </button>
       </div>
 
@@ -649,85 +589,6 @@ export default function Cadastros({ user }) {
         </div>
       )}
 
-      {activeSubTab === 'classe_servicos' && (
-        <div style={styles.splitLayout}>
-          <form onSubmit={handleClasseServicoSubmit} className="glass-panel" style={styles.formPanel}>
-            <h3 style={styles.panelTitle}>{editingClasseServicoId ? 'Editar Classe de Serviço' : 'Cadastrar Classe de Serviço'}</h3>
-            
-            <div className="glass-input-group">
-              <label className="glass-label">Nome do Serviço</label>
-              <input type="text" required value={classeServicoForm.nome} onChange={e => setClasseServicoForm({...classeServicoForm, nome: e.target.value})} className="glass-input" placeholder="Ex: Dedetização / Controle de Pragas" />
-            </div>
-
-            <div className="glass-input-group">
-              <label className="glass-label">Descrição (Opcional)</label>
-              <input type="text" value={classeServicoForm.descricao} onChange={e => setClasseServicoForm({...classeServicoForm, descricao: e.target.value})} className="glass-input" placeholder="Descreva brevemente a finalidade técnica" />
-            </div>
-
-            <div className="glass-input-group">
-              <label className="glass-label">Prestador de Serviço Designado (Opcional)</label>
-              <select value={classeServicoForm.prestador_id} onChange={e => setClasseServicoForm({...classeServicoForm, prestador_id: e.target.value})} className="glass-input glass-select">
-                <option value="">Nenhum prestador associado</option>
-                {prestadores.filter(p => p.ativo).map(p => (
-                  <option key={p._id} value={p._id}>{p.nome}</option>
-                ))}
-              </select>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '1rem 0' }}>
-              <input type="checkbox" id="cs-ativo" checked={classeServicoForm.ativo} onChange={e => setClasseServicoForm({...classeServicoForm, ativo: e.target.checked})} style={styles.checkbox} />
-              <label htmlFor="cs-ativo" className="glass-label" style={{ margin: 0, cursor: 'pointer' }}>Serviço Ativo</label>
-            </div>
-
-            <div style={{ display: 'flex', gap: '1rem' }}>
-              <button type="submit" disabled={loading} className="glass-btn glass-btn-primary" style={{ flex: 2, padding: '0.75rem' }}>
-                {editingClasseServicoId ? 'Salvar Alterações' : 'Salvar Classe de Serviço'}
-              </button>
-              {editingClasseServicoId && (
-                <button type="button" onClick={() => { setEditingClasseServicoId(null); setClasseServicoForm({ nome: '', descricao: '', prestador_id: '', ativo: true }); }} className="glass-btn" style={{ flex: 1, padding: '0.75rem' }}>
-                  Cancelar
-                </button>
-              )}
-            </div>
-          </form>
-
-          {/* Listagem */}
-          <div className="glass-panel" style={styles.listPanel}>
-            <h3 style={styles.panelTitle}>Classes de Serviço ({classeServicos.length})</h3>
-            <div style={styles.list}>
-              {classeServicos.length === 0 ? (
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Nenhuma classe de serviço cadastrada.</p>
-              ) : (
-                classeServicos.map(cs => {
-                  const designandoPrestador = prestadores.find(p => p._id === cs.prestador_id);
-                  return (
-                    <div key={cs._id} style={{ ...styles.listItem, opacity: cs.ativo ? 1 : 0.6 }} className="glass-card">
-                      <div>
-                        <h4 style={styles.itemTitle}>{cs.nome}</h4>
-                        {cs.descricao && <p style={styles.itemSubtitle}>{cs.descricao}</p>}
-                        <p style={{ ...styles.itemSubtitle, fontWeight: '500', color: 'var(--primary)' }}>
-                          Prestador: {designandoPrestador ? designandoPrestador.nome : 'Sem prestador associado'}
-                        </p>
-                        <span style={{ ...styles.itemTag, color: cs.ativo ? 'var(--success)' : 'var(--danger)' }}>
-                          {cs.ativo ? 'Ativo' : 'Inativo'}
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <button onClick={() => handleEditClasseServico(cs)} className="glass-btn" style={{ padding: '0.35rem' }} title="Editar">
-                          <Edit size={14} />
-                        </button>
-                        <button onClick={() => handleDeleteClasseServico(cs._id)} className="glass-btn" style={{ padding: '0.35rem', color: 'var(--danger)' }} title="Deletar/Inativar">
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

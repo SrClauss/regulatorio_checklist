@@ -16,7 +16,6 @@ from app.models.empresa import EmpresaDB
 from app.models.documento import DocumentoDB
 from app.models.tarefa import TarefaDB, HistoricoObservacao
 from app.models.prestador import PrestadorDB
-from app.models.classe_servico import ClasseServicoDB
 
 # Função utilitária para adicionar meses
 def add_months(sourcedate: datetime, months: int) -> datetime:
@@ -93,79 +92,16 @@ async def run_seed():
 
     print("-> 4 Prestadores de Serviço cadastrados.")
 
-    # 2c. Cria Classes de Serviço Mock
-    print("Cadastrando classes de serviço...")
-    
-    classes_data = [
-        ("Dedetização / Controle de Pragas", "Serviços periódicos de desinsectização e controle integrado de vetores.", pid_controlx),
-        ("Análise de Potabilidade de Água", "Coleta e análise físico-química de amostras de água de consumo.", pid_aquaclean),
-        ("Calibração de Termômetros e Balanças", "Serviços de aferição de equipamentos de medição.", pid_calibramed),
-        ("Elaboração/Revisão do PGRSS", "Documento do Plano de Gerenciamento de Resíduos de Serviços de Saúde.", pid_solucoes),
-        ("Teste de Estanqueidade do Sistema", "Verificação técnica contra vazamentos em tanques subterrâneos.", pid_solucoes),
-        ("Limpeza e Laudo da Caixa SAO", "Remoção de lodo e aferição de separador de água e óleo.", pid_controlx),
-        ("Relatório Anual RAPP IBAMA", "Preenchimento e emissão do relatório anual do Ibama.", pid_solucoes),
-        
-        ("Análise de Água de Poço de Monitoramento", "Análises laboratoriais de poços de monitoramento ambiental.", pid_aquaclean),
-        ("Laudo de Emissões Atmosféricas", "Medições e emissão de laudo de chaminés e poluentes atmosféricos.", pid_aquaclean),
-        ("Relatório de Geração de Resíduos Sólidos", "Compilação de inventários de resíduos para órgãos ambientais.", pid_solucoes),
-        ("Monitoramento de Ruído Limítrofe", "Medições de pressão sonora no entorno de instalações.", pid_calibramed),
-        ("Coleta de Resíduos de Saúde (Grupo A/B)", "Serviços de transporte e destinação final de resíduos biológicos/químicos.", pid_solucoes),
-        ("Laudo de Radioproteção e Calibração", "Ensaios de radiação e aferição de equipamentos de imagem diagnóstica.", pid_calibramed),
-        ("Treinamento MOPP de Motoristas", "Capacitação profissional para transporte de produtos perigosos.", pid_calibramed),
-        ("Ficha de Emergência e Envelopamento", "Elaboração de documentos de transporte rodoviário regulamentado.", pid_solucoes),
-        ("Plano de Atendimento a Emergências (PAE)", "Manual de procedimentos para contingência de acidentes e vazamentos.", pid_solucoes),
-        ("Envio de BMPO (Psicotrópicos)", "Relatório mensal de movimentação de portaria regulamentada de medicamentos.", pid_solucoes),
-        ("Revisão de Manual de Boas Práticas e POPs", "Adequação de manuais sanitários e POPs da vigilância sanitária.", pid_solucoes)
-    ]
-    
-    class_map = {}
-    for nome, desc, pid in classes_data:
-        cs = ClasseServicoDB(nome=nome, descricao=desc, prestador_id=pid, ativo=True)
-        cs_res = await db.classe_servicos.insert_one(cs.model_dump(by_alias=True, exclude={"id"}))
-        class_map[nome] = cs_res.inserted_id
-
-    print(f"-> {len(classes_data)} Classes de Serviço cadastradas.")
-
-    def get_classe_servico_id_for_title(title: str):
+    def get_prestador_id_for_title(title: str):
         title_lower = title.lower()
         if "dedetização" in title_lower or "pragas" in title_lower:
-            return class_map.get("Dedetização / Controle de Pragas")
+            return pid_controlx
         elif "potabilidade" in title_lower or "análise de água de consumo" in title_lower or "análise de potabilidade" in title_lower:
-            return class_map.get("Análise de Potabilidade de Água")
-        elif "calibração" in title_lower or "termômetro" in title_lower or "balança" in title_lower:
-            if "radioproteção" in title_lower:
-                return class_map.get("Laudo de Radioproteção e Calibração")
-            return class_map.get("Calibração de Termômetros e Balanças")
-        elif "pgrss" in title_lower:
-            return class_map.get("Elaboração/Revisão do PGRSS")
-        elif "estanqueidade" in title_lower:
-            return class_map.get("Teste de Estanqueidade do Sistema")
-        elif "caixa sao" in title_lower or "limpeza e laudo" in title_lower:
-            return class_map.get("Limpeza e Laudo da Caixa SAO")
-        elif "rapp ibama" in title_lower or "ibama" in title_lower:
-            return class_map.get("Relatório Anual RAPP IBAMA")
-        elif "poço de monitoramento" in title_lower or "água de poço" in title_lower:
-            return class_map.get("Análise de Água de Poço de Monitoramento")
-        elif "emissões" in title_lower or "atmosféricas" in title_lower:
-            return class_map.get("Laudo de Emissões Atmosféricas")
-        elif "resíduos sólidos" in title_lower or "geração de resíduos" in title_lower:
-            return class_map.get("Relatório de Geração de Resíduos Sólidos")
-        elif "ruído" in title_lower or "sonora" in title_lower:
-            return class_map.get("Monitoramento de Ruído Limítrofe")
-        elif "grupo a/b" in title_lower or "coleta de resíduos" in title_lower:
-            return class_map.get("Coleta de Resíduos de Saúde (Grupo A/B)")
-        elif "radioproteção" in title_lower:
-            return class_map.get("Laudo de Radioproteção e Calibração")
-        elif "mopp" in title_lower or "treinamento" in title_lower:
-            return class_map.get("Treinamento MOPP de Motoristas")
-        elif "envelopamento" in title_lower or "ficha de emergência" in title_lower:
-            return class_map.get("Ficha de Emergência e Envelopamento")
-        elif "emergências" in title_lower or "pae" in title_lower:
-            return class_map.get("Plano de Atendimento a Emergências (PAE)")
-        elif "bmpo" in title_lower or "psicotrópicos" in title_lower:
-            return class_map.get("Envio de BMPO (Psicotrópicos)")
-        elif "boas práticas" in title_lower or "pop" in title_lower:
-            return class_map.get("Revisão de Manual de Boas Práticas e POPs")
+            return pid_aquaclean
+        elif "calibração" in title_lower or "termômetro" in title_lower or "balança" in title_lower or "radioproteção" in title_lower:
+            return pid_calibramed
+        elif "pgrss" in title_lower or "estanqueidade" in title_lower or "caixa sao" in title_lower or "limpeza e laudo" in title_lower or "rapp ibama" in title_lower or "ibama" in title_lower or "poço de monitoramento" in title_lower or "água de poço" in title_lower or "emissões" in title_lower or "atmosféricas" in title_lower or "resíduos" in title_lower or "ruído" in title_lower or "coleta" in title_lower or "mopp" in title_lower or "envelopamento" in title_lower or "ficha de emergência" in title_lower or "emergências" in title_lower or "pae" in title_lower or "bmpo" in title_lower or "psicotrópicos" in title_lower or "boas práticas" in title_lower or "pop" in title_lower:
+            return pid_solucoes
         return None
 
     # 3. Cria Templates de Documentos por Segmento
@@ -347,7 +283,8 @@ async def run_seed():
                 
                 # status do documento
                 if data_vencimento_emp < hoje:
-                    status_doc = "Vencido"
+                    # Apenas 3% das licenças passadas são deixadas como Vencido
+                    status_doc = "Vencido" if (idx % 33 == 0) else "Ativo"
                 elif current_emissao <= hoje <= data_vencimento_emp:
                     status_doc = "Ativo"
                 else:
@@ -380,15 +317,16 @@ async def run_seed():
                         
                         # Determina o status com base na data da condicionante (se é passada ou futura)
                         if data_corrente < hoje:
-                            # 85% Concluído, 15% Atrasado
-                            if (idx + data_corrente.month) % 7 == 0:
+                            # 98% Concluído, 2% Atrasado (pouquíssimas atrasadas)
+                            if (idx + data_corrente.month) % 50 == 0:
                                 status_tarefa = "Atrasado"
                             else:
                                 status_tarefa = "Concluído"
                         else:
                             # Vencimento futuro
-                            if (data_corrente - hoje).days < 20:
-                                status_tarefa = "Em Andamento" if idx % 2 == 0 else "Pendente"
+                            if (data_corrente - hoje).days < 30:
+                                # Algumas em andamento no futuro próximo
+                                status_tarefa = "Em Andamento" if (idx % 4 == 0) else "Pendente"
                             else:
                                 status_tarefa = "Pendente"
                                 
@@ -397,7 +335,7 @@ async def run_seed():
                         nova_tarefa = TarefaDB(
                             documento_id=doc_id,
                             empresa_id=emp_id,
-                            classe_servico_id=get_classe_servico_id_for_title(cond.titulo),
+                            prestador_id=get_prestador_id_for_title(cond.titulo),
                             titulo=cond.titulo,
                             descricao=f"Condicionante periódica de {cond.titulo} vinculada ao documento {template.nome_documento}.",
                             tipo_id="checklist_interno",
@@ -432,16 +370,17 @@ async def run_seed():
         data_vencimento_extra = hoje + timedelta(days=dias_offset)
         
         if data_vencimento_extra < hoje:
-            status_extra = "Concluído" if idx % 5 != 0 else "Atrasado"
+            # Muito poucas extras atrasadas
+            status_extra = "Concluído" if idx % 40 != 0 else "Atrasado"
         else:
-            status_extra = "Pendente" if idx % 2 == 0 else "Em Andamento"
+            status_extra = "Pendente" if idx % 3 != 0 else "Em Andamento"
             
         data_conclusao_extra = data_vencimento_extra if status_extra == "Concluído" else None
         
         t_extra = TarefaDB(
             documento_id=None,
             empresa_id=emp_id,
-            classe_servico_id=get_classe_servico_id_for_title(f"Checklist de Auditoria Interna - {emp['fantasia']}"),
+            prestador_id=get_prestador_id_for_title(f"Checklist de Auditoria Interna - {emp['fantasia']}"),
             titulo=f"Checklist de Auditoria Interna - {emp['fantasia']}",
             descricao=f"Auditoria interna geral e verificação semanal de compliance de rotina.",
             tipo_id="checklist_interno",

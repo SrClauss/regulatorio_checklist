@@ -22,7 +22,6 @@ import {
 
 export default function Prestadores({ user, selectedProviderId }) {
   const [prestadores, setPrestadores] = useState([]);
-  const [classeServicos, setClasseServicos] = useState([]);
   const [tarefas, setTarefas] = useState([]);
   const [empresas, setEmpresas] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -47,14 +46,12 @@ export default function Prestadores({ user, selectedProviderId }) {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [prList, csList, tList, empList] = await Promise.all([
+      const [prList, tList, empList] = await Promise.all([
         api.listPrestadores(),
-        api.listClasseServicos(),
         api.listTarefas(),
         api.listEmpresas()
       ]);
       setPrestadores(prList);
-      setClasseServicos(csList);
       setTarefas(tList);
       setEmpresas(empList);
 
@@ -93,12 +90,8 @@ export default function Prestadores({ user, selectedProviderId }) {
 
   // Métricas de cada prestador
   const getProviderMetrics = (providerId) => {
-    // Acha as classes de serviço do prestador
-    const classes = classeServicos.filter(cs => cs.prestador_id === providerId);
-    const classIds = classes.map(c => c._id);
-    
-    // Filtra tarefas vinculadas a estas classes de serviço
-    const providerTasks = tarefas.filter(t => t.classe_servico_id && classIds.includes(t.classe_servico_id));
+    // Filtra tarefas vinculadas a este prestador
+    const providerTasks = tarefas.filter(t => t.prestador_id === providerId);
     
     const total = providerTasks.length;
     const completed = providerTasks.filter(t => t.status === 'Concluído').length;
@@ -109,7 +102,6 @@ export default function Prestadores({ user, selectedProviderId }) {
     const sla = total > 0 ? Math.round((completed / total) * 100) : 100;
 
     return {
-      classes,
       tasks: providerTasks,
       total,
       completed,
@@ -125,8 +117,7 @@ export default function Prestadores({ user, selectedProviderId }) {
     const activePrs = prestadores.filter(p => p.ativo).length;
     
     // Tarefas com prestador associado
-    const classIdsWithProvider = classeServicos.filter(cs => cs.prestador_id).map(cs => cs._id);
-    const tasksWithProvider = tarefas.filter(t => t.classe_servico_id && classIdsWithProvider.includes(t.classe_servico_id));
+    const tasksWithProvider = tarefas.filter(t => t.prestador_id);
     
     const totalServices = tasksWithProvider.filter(t => t.status === 'Concluído').length;
     const totalProjectedCost = tasksWithProvider.reduce((sum, t) => sum + (t.custo_projetado || 0), 0);
@@ -134,7 +125,6 @@ export default function Prestadores({ user, selectedProviderId }) {
     return {
       totalProviders: prestadores.length,
       activeProviders: activePrs,
-      totalClasses: classeServicos.length,
       totalServices,
       totalProjectedCost
     };
@@ -225,8 +215,8 @@ export default function Prestadores({ user, selectedProviderId }) {
             <ListFilter size={20} color="#8b5cf6" />
           </div>
           <div>
-            <h3 style={styles.statVal}>{stats.totalClasses}</h3>
-            <span style={styles.statLabel}>Categorias de Serviço</span>
+            <h3 style={styles.statVal}>{tarefas.filter(t => t.prestador_id).length}</h3>
+            <span style={styles.statLabel}>Tarefas Terceirizadas</span>
           </div>
         </div>
 
@@ -412,17 +402,19 @@ export default function Prestadores({ user, selectedProviderId }) {
                         </div>
                       </div>
 
-                      {/* Lista de Classes atreladas */}
+                      {/* Lista de Atividades Únicas */}
                       <div style={styles.classesList}>
-                        {metrics.classes.length === 0 ? (
-                          <span style={styles.noClasses}>Sem categoria de serviço vinculada</span>
-                        ) : (
-                          metrics.classes.map(c => (
-                            <span key={c._id} style={styles.classTag}>
-                              {c.nome}
+                        {(() => {
+                          const uniqueTitles = [...new Set(metrics.tasks.map(t => t.titulo))];
+                          if (uniqueTitles.length === 0) {
+                            return <span style={styles.noClasses}>Sem obrigações vinculadas</span>;
+                          }
+                          return uniqueTitles.slice(0, 3).map((title, i) => (
+                            <span key={i} style={styles.classTag}>
+                              {title}
                             </span>
-                          ))
-                        )}
+                          ));
+                        })()}
                       </div>
                     </div>
 
@@ -478,8 +470,8 @@ export default function Prestadores({ user, selectedProviderId }) {
                 <div style={styles.detailInfoItem}>
                   <UserCheck size={16} color="var(--text-muted)" />
                   <div>
-                    <strong>Categorias sob Gestão:</strong>
-                    <span>{getProviderMetrics(selectedProvider._id).classes.length} especialidades</span>
+                    <strong>Serviços Distintos:</strong>
+                    <span>{[...new Set(getProviderMetrics(selectedProvider._id).tasks.map(t => t.titulo))].length} tipos</span>
                   </div>
                 </div>
                 <div style={styles.detailInfoItem}>
