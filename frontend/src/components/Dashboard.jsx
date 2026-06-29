@@ -674,18 +674,79 @@ export default function Dashboard({ user, onNavigateTab }) {
               <span style={{ color: 'var(--text-light)', fontSize: '0.78rem' }}>
                 Concluídas: {periodMetrics.concluidas} de {periodMetrics.total}
               </span>
+            </div>      {/* 1. SEÇÃO OPERACIONAL: Ações Críticas & Agrupamento por Classes */}
+      <div style={styles.dashboardBodyRow}>
+        
+        {/* Ações Críticas (flex: 1.2) */}
+        <div style={{ ...styles.column, flex: 1.2 }}>
+          <div className="glass-panel" style={styles.panel}>
+            <div style={styles.panelHeader}>
+              <CheckSquare size={20} color="var(--primary)" />
+              <h3 style={styles.panelTitle}>Ações Críticas ("O que precisa ser feito")</h3>
+            </div>
+            <p style={styles.panelDescription}>
+              Listagem imediata das condicionantes pendentes mais próximas do vencimento regulatório.
+            </p>
+
+            <div style={styles.todoList}>
+              {urgentActions.length > 0 ? (
+                urgentActions.map(task => {
+                  const isOverdue = isTaskOverdue(task);
+                  const color = isOverdue ? 'var(--danger)' : task.status === 'Em Andamento' ? 'var(--warning)' : 'var(--primary)';
+                  const dateLabel = new Date(task.data_vencimento).toLocaleDateString('pt-BR');
+                  
+                  return (
+                    <div key={task._id} style={styles.todoItem}>
+                      <div style={{ ...styles.todoStatusIndicator, background: color }}></div>
+                      
+                      <div style={styles.todoContent}>
+                        <div style={styles.todoTitleRow}>
+                          <span style={styles.todoTaskTitle} title={task.titulo}>{task.titulo}</span>
+                          <span style={{ ...styles.todoDateBadge, color: isOverdue ? 'var(--danger)' : 'var(--text-muted)' }}>
+                            venc. {dateLabel}
+                          </span>
+                        </div>
+                        
+                        <div style={styles.todoMetadataRow}>
+                          <span>{getEmpresaNome(task.empresa_id)}</span>
+                          {task.valor_estimado > 0 && (user.role === 'admin' || user.role === 'consultor') && (
+                            <span style={styles.todoValue}>{formatCurrency(task.valor_estimado)}</span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div style={styles.todoActions}>
+                        <button
+                          onClick={() => handleConcludeTask(task._id)}
+                          style={styles.todoCheckButton}
+                          title="Concluir tarefa agora"
+                        >
+                          <CheckCircle2 size={16} />
+                        </button>
+                        <button
+                          onClick={() => onNavigateTab && onNavigateTab('cronograma')}
+                          style={styles.todoLinkButton}
+                          title="Ver no Cronograma completo"
+                        >
+                          <ArrowRight size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div style={styles.emptyTodo}>
+                  <CheckCircle2 size={36} color="var(--success)" />
+                  <p style={{ marginTop: '0.5rem', fontWeight: '600' }}>Tudo limpo!</p>
+                  <p style={{ color: 'var(--text-light)', fontSize: '0.8rem' }}>Sem pendências críticas ou de execução urgente no período.</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
-      </section>
 
-      {/* Conteúdo Principal do Dashboard */}
-      <div style={styles.dashboardBodyRow}>
-        
-        {/* Lado Esquerdo: Classes de Condicionantes e Gráficos */}
+        {/* Agrupamento por Classes de Condicionantes (flex: 1.8) */}
         <div style={{ ...styles.column, flex: 1.8 }}>
-          
-          {/* Sessão 1: Agrupamento por Classe de Condicionantes */}
           <div className="glass-panel" style={styles.panel}>
             <div style={styles.panelHeader}>
               <Award size={20} color="var(--primary)" />
@@ -761,9 +822,16 @@ export default function Dashboard({ user, onNavigateTab }) {
               </table>
             </div>
           </div>
+        </div>
 
-          {/* Gráfico Anual (Apenas Admins/Consultores) */}
-          {(user.role === 'admin' || user.role === 'consultor') && (
+      </div>
+
+      {/* 2. SEÇÃO ESTRATÉGICA / ANALÍTICA: Previsão Financeira & Pizza & Comparativo */}
+      <div style={{ ...styles.dashboardBodyRow, marginTop: '1.5rem' }}>
+        
+        {/* Previsão Financeira Anual (flex: 1.5) */}
+        {(user.role === 'admin' || user.role === 'consultor') && (
+          <div style={{ ...styles.column, flex: 1.5 }}>
             <div className="glass-panel" style={{ ...styles.panel, height: '360px' }}>
               <div style={styles.panelHeader}>
                 <TrendingUp size={20} color="var(--primary)" />
@@ -806,89 +874,128 @@ export default function Dashboard({ user, onNavigateTab }) {
                 <div style={styles.legendItem}><div style={{ ...styles.legendDot, background: 'var(--danger)' }}></div><span>Custos de Renovação</span></div>
               </div>
             </div>
-          )}
+          </div>
+        )}
 
-        </div>
-
-        {/* Lado Direito: Ações Recomendadas e Visão Comparativa de Prazos */}
-        <div style={{ ...styles.column, flex: 1.2 }}>
-          
-          {/* O Que Precisa Ser Feito (Ações Recomendadas) */}
-          <div className="glass-panel" style={styles.panel}>
-            <div style={styles.panelHeader}>
-              <CheckSquare size={20} color="var(--primary)" />
-              <h3 style={styles.panelTitle}>Ações Críticas ("O que precisa ser feito")</h3>
+        {/* Principais Condicionantes (Gráfico de Pizza) (flex: 1) */}
+        <div style={{ ...styles.column, flex: 1 }}>
+          <div className="glass-panel" style={{ ...styles.panel, height: '360px', justifyContent: 'space-between' }}>
+            <div>
+              <div style={styles.panelHeader}>
+                <Award size={20} color="var(--primary)" />
+                <h3 style={styles.panelTitle}>Principais Condicionantes</h3>
+              </div>
+              <p style={styles.panelDescription}>
+                Distribuição das condicionantes mais frequentes no período ({selectedPeriod}).
+              </p>
             </div>
-            <p style={styles.panelDescription}>
-              Listagem imediata das condicionantes pendentes mais próximas do vencimento regulatório.
-            </p>
+            
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '1rem',
+              flexWrap: 'wrap',
+              padding: '0.25rem 0',
+              flex: 1
+            }}>
+              {topCondicionantesPieData.total > 0 ? (
+                <>
+                  <div style={{ position: 'relative', width: '105px', height: '105px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <svg viewBox="0 0 100 100" style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }}>
+                      {topCondicionantesPieData.slices.map((slice, idx) => {
+                        const pathData = getSlicePath(slice.startPercent, slice.endPercent);
+                        return (
+                          <path
+                            key={idx}
+                            d={pathData}
+                            fill={pieColors[idx % pieColors.length]}
+                            style={{ transition: 'all 0.3s ease' }}
+                          />
+                        );
+                      })}
+                      <circle cx="50" cy="50" r="24" fill="var(--card-bg, #ffffff)" />
+                    </svg>
+                    <div style={{
+                      position: 'absolute',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      pointerEvents: 'none'
+                    }}>
+                      <span style={{ fontSize: '1.15rem', fontWeight: '800', color: 'var(--text-main)', lineHeight: 1 }}>
+                        {topCondicionantesPieData.total}
+                      </span>
+                      <span style={{ fontSize: '0.6rem', color: 'var(--text-light)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: '2px' }}>
+                        Total
+                      </span>
+                    </div>
+                  </div>
 
-            <div style={styles.todoList}>
-              {urgentActions.length > 0 ? (
-                urgentActions.map(task => {
-                  const isOverdue = isTaskOverdue(task);
-                  const color = isOverdue ? 'var(--danger)' : task.status === 'Em Andamento' ? 'var(--warning)' : 'var(--primary)';
-                  const dateLabel = new Date(task.data_vencimento).toLocaleDateString('pt-BR');
-                  
-                  return (
-                    <div key={task._id} style={styles.todoItem}>
-                      <div style={{ ...styles.todoStatusIndicator, background: color }}></div>
-                      
-                      <div style={styles.todoContent}>
-                        <div style={styles.todoTitleRow}>
-                          <span style={styles.todoTaskTitle} title={task.titulo}>{task.titulo}</span>
-                          <span style={{ ...styles.todoDateBadge, color: isOverdue ? 'var(--danger)' : 'var(--text-muted)' }}>
-                            venc. {dateLabel}
+                  <div style={{
+                    flex: 1,
+                    minWidth: '120px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.35rem'
+                  }}>
+                    {topCondicionantesPieData.slices.map((slice, idx) => (
+                      <div key={idx} style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '0.4rem',
+                        fontSize: '0.76rem'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', minWidth: 0, flex: 1 }}>
+                          <div style={{
+                            width: '6px',
+                            height: '6px',
+                            borderRadius: '50%',
+                            backgroundColor: pieColors[idx % pieColors.length],
+                            flexShrink: 0
+                          }}></div>
+                          <span style={{
+                            color: 'var(--text-main)',
+                            fontWeight: '500',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                          }} title={slice.name}>
+                            {slice.name}
                           </span>
                         </div>
-                        
-                        <div style={styles.todoMetadataRow}>
-                          <span>{getEmpresaNome(task.empresa_id)}</span>
-                          {task.valor_estimado > 0 && (user.role === 'admin' || user.role === 'consultor') && (
-                            <span style={styles.todoValue}>{formatCurrency(task.valor_estimado)}</span>
-                          )}
-                        </div>
+                        <span style={{ color: 'var(--text-muted)', fontWeight: '700', flexShrink: 0 }}>
+                          {slice.value} ({Math.round(slice.percent * 100)}%)
+                        </span>
                       </div>
-
-                      <div style={styles.todoActions}>
-                        <button
-                          onClick={() => handleConcludeTask(task._id)}
-                          style={styles.todoCheckButton}
-                          title="Concluir tarefa agora"
-                        >
-                          <CheckCircle2 size={16} />
-                        </button>
-                        <button
-                          onClick={() => onNavigateTab && onNavigateTab('cronograma')}
-                          style={styles.todoLinkButton}
-                          title="Ver no Cronograma completo"
-                        >
-                          <ArrowRight size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
+                    ))}
+                  </div>
+                </>
               ) : (
-                <div style={styles.emptyTodo}>
-                  <CheckCircle2 size={36} color="var(--success)" />
-                  <p style={{ marginTop: '0.5rem', fontWeight: '600' }}>Tudo limpo!</p>
-                  <p style={{ color: 'var(--text-light)', fontSize: '0.8rem' }}>Sem pendências críticas ou de execução urgente no período.</p>
+                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                  Nenhuma condicionante no período
                 </div>
               )}
             </div>
           </div>
+        </div>
 
-          {/* Sessão 2: Visão Comparativa de Prazos */}
-          <div className="glass-panel" style={styles.panel}>
-            <div style={styles.panelHeader}>
-              <CalendarDays size={20} color="var(--primary)" />
-              <h3 style={styles.panelTitle}>Visão Comparativa de Prazos</h3>
+        {/* Visão Comparativa de Prazos (flex: 1) */}
+        <div style={{ ...styles.column, flex: 1 }}>
+          <div className="glass-panel" style={{ ...styles.panel, height: '360px', justifyContent: 'space-between' }}>
+            <div>
+              <div style={styles.panelHeader}>
+                <CalendarDays size={20} color="var(--primary)" />
+                <h3 style={styles.panelTitle}>Visão Comparativa de Prazos</h3>
+              </div>
+              <p style={styles.panelDescription}>
+                Proporção de status de condicionantes mensais, bimestrais e trimestrais.
+              </p>
             </div>
-            <p style={styles.panelDescription}>
-              Proporção de status de condicionantes em termos mensais, bimestrais e trimestrais.
-            </p>
-            <div style={styles.comparisonList}>
+            
+            <div style={{ ...styles.comparisonList, flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '0.75rem' }}>
               {comparativePeriods.map(period => {
                 const compliance = period.total > 0 ? Math.round((period.concl / period.total) * 100) : 100;
                 const pConcl = period.total > 0 ? (period.concl / period.total) * 100 : 0;
@@ -918,114 +1025,13 @@ export default function Dashboard({ user, onNavigateTab }) {
                 );
               })}
             </div>
-            <div style={styles.chartLegend}>
+
+            <div style={{ ...styles.chartLegend, marginTop: '0.5rem' }}>
               <div style={styles.legendItem}><div style={{ ...styles.legendDot, background: 'var(--success)' }}></div><span>Concluídas</span></div>
               <div style={styles.legendItem}><div style={{ ...styles.legendDot, background: '#eab308' }}></div><span>Em Processo</span></div>
               <div style={styles.legendItem}><div style={{ ...styles.legendDot, background: 'var(--danger)' }}></div><span>Pendentes / Atrasadas</span></div>
             </div>
           </div>
-
-          {/* Sessão 3: Principais Condicionantes (Gráfico de Pizza) */}
-          <div className="glass-panel" style={styles.panel}>
-            <div style={styles.panelHeader}>
-              <Award size={20} color="var(--primary)" />
-              <h3 style={styles.panelTitle}>Principais Condicionantes</h3>
-            </div>
-            <p style={styles.panelDescription}>
-              Distribuição e volumetria das condicionantes mais frequentes no período ({selectedPeriod}).
-            </p>
-            
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '1.5rem',
-              flexWrap: 'wrap',
-              marginTop: '1rem',
-              padding: '0.5rem 0'
-            }}>
-              {topCondicionantesPieData.total > 0 ? (
-                <>
-                  <div style={{ position: 'relative', width: '130px', height: '130px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <svg viewBox="0 0 100 100" style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }}>
-                      {topCondicionantesPieData.slices.map((slice, idx) => {
-                        const pathData = getSlicePath(slice.startPercent, slice.endPercent);
-                        return (
-                          <path
-                            key={idx}
-                            d={pathData}
-                            fill={pieColors[idx % pieColors.length]}
-                            style={{ transition: 'all 0.3s ease' }}
-                          />
-                        );
-                      })}
-                      <circle cx="50" cy="50" r="24" fill="var(--card-bg, #ffffff)" />
-                    </svg>
-                    <div style={{
-                      position: 'absolute',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      pointerEvents: 'none'
-                    }}>
-                      <span style={{ fontSize: '1.25rem', fontWeight: '800', color: 'var(--text-main)', lineHeight: 1 }}>
-                        {topCondicionantesPieData.total}
-                      </span>
-                      <span style={{ fontSize: '0.65rem', color: 'var(--text-light)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: '2px' }}>
-                        Total
-                      </span>
-                    </div>
-                  </div>
-
-                  <div style={{
-                    flex: 1,
-                    minWidth: '150px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '0.5rem'
-                  }}>
-                    {topCondicionantesPieData.slices.map((slice, idx) => (
-                      <div key={idx} style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: '0.5rem',
-                        fontSize: '0.8rem'
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', minWidth: 0, flex: 1 }}>
-                          <div style={{
-                            width: '8px',
-                            height: '8px',
-                            borderRadius: '50%',
-                            backgroundColor: pieColors[idx % pieColors.length],
-                            flexShrink: 0
-                          }}></div>
-                          <span style={{
-                            color: 'var(--text-main)',
-                            fontWeight: '500',
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis'
-                          }} title={slice.name}>
-                            {slice.name}
-                          </span>
-                        </div>
-                        <span style={{ color: 'var(--text-muted)', fontWeight: '700', flexShrink: 0 }}>
-                          {slice.value} ({Math.round(slice.percent * 100)}%)
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                  Nenhuma condicionante no período
-                </div>
-              )}
-            </div>
-          </div>
-
         </div>
 
       </div>
