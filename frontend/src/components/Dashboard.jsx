@@ -199,12 +199,37 @@ export default function Dashboard({ user, onNavigateTab }) {
   // Agrupamento por Classes de Condicionantes (Serviços)
   const groupedClasses = useMemo(() => {
     const groups = {};
+    
+    // Inicializa todas as classes conhecidas
+    csList.forEach(cs => {
+      groups[cs._id] = {
+        id: cs._id,
+        nome: cs.nome,
+        concluidas: 0,
+        emProcesso: 0,
+        pendentes: 0,
+        atrasadas: 0,
+        total: 0
+      };
+    });
+
+    // Inicializa Sem Classe
+    groups['sem_classe'] = {
+      id: 'sem_classe',
+      nome: 'Sem Classe / Outros',
+      concluidas: 0,
+      emProcesso: 0,
+      pendentes: 0,
+      atrasadas: 0,
+      total: 0
+    };
+
     activeTasks.forEach(t => {
       const classId = t.classe_servico_id || 'sem_classe';
       if (!groups[classId]) {
         groups[classId] = {
           id: classId,
-          nome: classId === 'sem_classe' ? 'Sem Classe / Outros' : (csList.find(cs => cs._id === classId)?.nome || 'Outros'),
+          nome: classId === 'sem_classe' ? 'Sem Classe / Outros' : 'Outros',
           concluidas: 0,
           emProcesso: 0,
           pendentes: 0,
@@ -225,13 +250,16 @@ export default function Dashboard({ user, onNavigateTab }) {
       }
     });
 
-    return Object.values(groups).sort((a, b) => {
-      // Classes com mais pendências e atrasos no topo
-      const pendenciasA = a.atrasadas + a.emProcesso + a.pendentes;
-      const pendenciasB = b.atrasadas + b.emProcesso + b.pendentes;
-      if (pendenciasB !== pendenciasA) return pendenciasB - pendenciasA;
-      return b.total - a.total;
-    });
+    // Remove sem_classe apenas se estiver vazio
+    return Object.values(groups)
+      .filter(g => g.total > 0 || g.id !== 'sem_classe')
+      .sort((a, b) => {
+        // Classes com mais pendências e atrasos no topo
+        const pendenciasA = a.atrasadas + a.emProcesso + a.pendentes;
+        const pendenciasB = b.atrasadas + b.emProcesso + b.pendentes;
+        if (pendenciasB !== pendenciasA) return pendenciasB - pendenciasA;
+        return b.total - a.total;
+      });
   }, [activeTasks, csList]);
 
   // Principais Condicionantes para Gráfico de Pizza
@@ -679,21 +707,287 @@ export default function Dashboard({ user, onNavigateTab }) {
         </div>
       </section>
 
-      {/* 1. SEÇÃO OPERACIONAL: Ações Críticas & Agrupamento por Classes */}
+      {/* 1. SEÇÃO DE GRÁFICOS (SUPERIOR): Previsão Financeira & Comparativo de Prazos */}
       <div style={styles.dashboardBodyRow}>
+        
+        {/* Previsão Financeira Anual (Apenas Admins/Consultores) */}
+        {(user.role === 'admin' || user.role === 'consultor') ? (
+          <>
+            <div style={{ ...styles.column, flex: 1.8 }}>
+              <div className="glass-panel" style={{ ...styles.panel, height: '360px' }}>
+                <div style={styles.panelHeader}>
+                  <TrendingUp size={20} color="var(--primary)" />
+                  <h3 style={styles.panelTitle}>Previsão Financeira Anual ({new Date().getFullYear()})</h3>
+                </div>
+                
+                <div style={styles.chartArea}>
+                  <div style={styles.yAxis}>
+                    <span>{formatCurrency(maxRevenue)}</span>
+                    <span>{formatCurrency(maxRevenue / 2)}</span>
+                    <span>R$ 0,00</span>
+                  </div>
+                  
+                  <div style={styles.chartScrollWrapper}>
+                    <div style={styles.barsContainer}>
+                      {anualData.map((mesData, index) => {
+                        const heightPercent = Math.max(((mesData.faturamento_condicionantes || 0) / maxRevenue) * 100, 4);
+                        const costHeightPercent = Math.max(((mesData.faturamento_renovacoes || 0) / maxRevenue) * 100, 4);
+                        return (
+                          <div key={index} style={styles.barColumn}>
+                            <div style={styles.barGroup}>
+                              <div 
+                                style={{ ...styles.bar, height: `${heightPercent}%`, background: 'var(--primary)' }}
+                                title={`Receita: ${formatCurrency(mesData.faturamento_condicionantes || 0)}`}
+                              ></div>
+                              <div 
+                                style={{ ...styles.bar, height: `${costHeightPercent}%`, background: 'var(--danger)' }}
+                                title={`Custos: ${formatCurrency(mesData.faturamento_renovacoes || 0)}`}
+                              ></div>
+                            </div>
+                            <span style={styles.barLabel}>{getMonthName(mesData.mes)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+                <div style={styles.chartLegend}>
+                  <div style={styles.legendItem}><div style={{ ...styles.legendDot, background: 'var(--primary)' }}></div><span>Receitas Estimadas</span></div>
+                  <div style={styles.legendItem}><div style={{ ...styles.legendDot, background: 'var(--danger)' }}></div><span>Custos de Renovação</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ ...styles.column, flex: 1.2 }}>
+              <div className="glass-panel" style={{ ...styles.panel, height: '360px', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={styles.panelHeader}>
+                    <CalendarDays size={20} color="var(--primary)" />
+                    <h3 style={styles.panelTitle}>Visão Comparativa de Prazos</h3>
+                  </div>
+                  <p style={styles.panelDescription}>
+                    Proporção de status de condicionantes mensais, bimestrais e trimestrais.
+                  </p>
+                </div>
+                
+                <div style={{ ...styles.comparisonList, flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '0.75rem' }}>
+                  {comparativePeriods.map(period => {
+                    const compliance = period.total > 0 ? Math.round((period.concl / period.total) * 100) : 100;
+                    const pConcl = period.total > 0 ? (period.concl / period.total) * 100 : 0;
+                    const pProc = period.total > 0 ? (period.proc / period.total) * 100 : 0;
+                    const pPend = period.total > 0 ? ((period.pend + period.atras) / period.total) * 100 : 0;
+
+                    return (
+                      <div key={period.key} style={styles.comparisonItem}>
+                        <div style={styles.comparisonLabelRow}>
+                          <span style={styles.comparisonName}>{period.label}</span>
+                          <span style={styles.comparisonDetails}>
+                            Total: <strong>{period.total}</strong> | Compliance: <strong style={{ color: compliance >= 80 ? 'var(--success)' : 'var(--danger)' }}>{compliance}%</strong>
+                          </span>
+                        </div>
+                        <div style={styles.comparisonBarOuter}>
+                          {period.total > 0 ? (
+                            <>
+                              {pConcl > 0 && <div style={{ ...styles.comparisonBarInner, width: `${pConcl}%`, background: 'var(--success)' }} title={`Concluídas: ${Math.round(pConcl)}%`}></div>}
+                              {pProc > 0 && <div style={{ ...styles.comparisonBarInner, width: `${pProc}%`, background: '#eab308' }} title={`Em Processo: ${Math.round(pProc)}%`}></div>}
+                              {pPend > 0 && <div style={{ ...styles.comparisonBarInner, width: `${pPend}%`, background: 'var(--danger)' }} title={`Pendente/Atrasada: ${Math.round(pPend)}%`}></div>}
+                            </>
+                          ) : (
+                            <div style={styles.comparisonBarEmpty}>Nenhuma obrigação</div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div style={{ ...styles.chartLegend, marginTop: '0.5rem' }}>
+                  <div style={styles.legendItem}><div style={{ ...styles.legendDot, background: 'var(--success)' }}></div><span>Concluídas</span></div>
+                  <div style={styles.legendItem}><div style={{ ...styles.legendDot, background: '#eab308' }}></div><span>Em Processo</span></div>
+                  <div style={styles.legendItem}><div style={{ ...styles.legendDot, background: 'var(--danger)' }}></div><span>Pendentes / Atrasadas</span></div>
+                </div>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div style={{ ...styles.column, flex: 1 }}>
+            <div className="glass-panel" style={{ ...styles.panel, height: '360px', justifyContent: 'space-between' }}>
+              <div>
+                <div style={styles.panelHeader}>
+                  <CalendarDays size={20} color="var(--primary)" />
+                  <h3 style={styles.panelTitle}>Visão Comparativa de Prazos</h3>
+                </div>
+                <p style={styles.panelDescription}>
+                  Proporção de status de condicionantes mensais, bimestrais e trimestrais.
+                </p>
+              </div>
+              
+              <div style={{ ...styles.comparisonList, flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '0.75rem' }}>
+                {comparativePeriods.map(period => {
+                  const compliance = period.total > 0 ? Math.round((period.concl / period.total) * 100) : 100;
+                  const pConcl = period.total > 0 ? (period.concl / period.total) * 100 : 0;
+                  const pProc = period.total > 0 ? (period.proc / period.total) * 100 : 0;
+                  const pPend = period.total > 0 ? ((period.pend + period.atras) / period.total) * 100 : 0;
+
+                  return (
+                    <div key={period.key} style={styles.comparisonItem}>
+                      <div style={styles.comparisonLabelRow}>
+                        <span style={styles.comparisonName}>{period.label}</span>
+                        <span style={styles.comparisonDetails}>
+                          Total: <strong>{period.total}</strong> | Compliance: <strong style={{ color: compliance >= 80 ? 'var(--success)' : 'var(--danger)' }}>{compliance}%</strong>
+                        </span>
+                      </div>
+                      <div style={styles.comparisonBarOuter}>
+                        {period.total > 0 ? (
+                          <>
+                            {pConcl > 0 && <div style={{ ...styles.comparisonBarInner, width: `${pConcl}%`, background: 'var(--success)' }} title={`Concluídas: ${Math.round(pConcl)}%`}></div>}
+                            {pProc > 0 && <div style={{ ...styles.comparisonBarInner, width: `${pProc}%`, background: '#eab308' }} title={`Em Processo: ${Math.round(pProc)}%`}></div>}
+                            {pPend > 0 && <div style={{ ...styles.comparisonBarInner, width: `${pPend}%`, background: 'var(--danger)' }} title={`Pendente/Atrasada: ${Math.round(pPend)}%`}></div>}
+                          </>
+                        ) : (
+                          <div style={styles.comparisonBarEmpty}>Nenhuma obrigação</div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div style={{ ...styles.chartLegend, marginTop: '0.5rem' }}>
+                <div style={styles.legendItem}><div style={{ ...styles.legendDot, background: 'var(--success)' }}></div><span>Concluídas</span></div>
+                <div style={styles.legendItem}><div style={{ ...styles.legendDot, background: '#eab308' }}></div><span>Em Processo</span></div>
+                <div style={styles.legendItem}><div style={{ ...styles.legendDot, background: 'var(--danger)' }}></div><span>Pendentes / Atrasadas</span></div>
+              </div>
+            </div>
+          </div>
+        )}
+
+      </div>
+
+      {/* 2. SEÇÃO DE PRINCIPAIS CONDICIONANTES (LINHA INTEIRA) */}
+      <div style={{ ...styles.dashboardBodyRow, marginTop: '1.5rem' }}>
+        <div style={{ ...styles.column, flex: 1 }}>
+          <div className="glass-panel" style={{ ...styles.panel, height: '240px', justifyContent: 'space-between' }}>
+            <div>
+              <div style={styles.panelHeader}>
+                <Award size={20} color="var(--primary)" />
+                <h3 style={styles.panelTitle}>Principais Condicionantes</h3>
+              </div>
+              <p style={styles.panelDescription}>
+                Distribuição das condicionantes mais frequentes no período ({selectedPeriod}).
+              </p>
+            </div>
+            
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '3rem',
+              flexWrap: 'wrap',
+              padding: '0.25rem 0',
+              flex: 1
+            }}>
+              {topCondicionantesPieData.total > 0 ? (
+                <>
+                  <div style={{ position: 'relative', width: '120px', height: '120px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <svg viewBox="0 0 100 100" style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }}>
+                      {topCondicionantesPieData.slices.map((slice, idx) => {
+                        const pathData = getSlicePath(slice.startPercent, slice.endPercent);
+                        return (
+                          <path
+                            key={idx}
+                            d={pathData}
+                            fill={pieColors[idx % pieColors.length]}
+                            style={{ transition: 'all 0.3s ease' }}
+                          />
+                        );
+                      })}
+                      <circle cx="50" cy="50" r="24" fill="var(--card-bg, #ffffff)" />
+                    </svg>
+                    <div style={{
+                      position: 'absolute',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      pointerEvents: 'none'
+                    }}>
+                      <span style={{ fontSize: '1.25rem', fontWeight: '800', color: 'var(--text-main)', lineHeight: 1 }}>
+                        {topCondicionantesPieData.total}
+                      </span>
+                      <span style={{ fontSize: '0.6rem', color: 'var(--text-light)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: '2px' }}>
+                        Total
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{
+                    flex: 1,
+                    minWidth: '250px',
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+                    gap: '0.5rem'
+                  }}>
+                    {topCondicionantesPieData.slices.map((slice, idx) => (
+                      <div key={idx} style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '0.4rem',
+                        fontSize: '0.78rem'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', minWidth: 0, flex: 1 }}>
+                          <div style={{
+                            width: '6px',
+                            height: '6px',
+                            borderRadius: '50%',
+                            backgroundColor: pieColors[idx % pieColors.length],
+                            flexShrink: 0
+                          }}></div>
+                          <span style={{
+                            color: 'var(--text-main)',
+                            fontWeight: '500',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                          }} title={slice.name}>
+                            {slice.name}
+                          </span>
+                        </div>
+                        <span style={{ color: 'var(--text-muted)', fontWeight: '700', flexShrink: 0 }}>
+                          {slice.value} ({Math.round(slice.percent * 100)}%)
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                  Nenhuma condicionante no período
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. SEÇÃO OPERACIONAL (ABAIXO DOS GRÁFICOS): Ações Críticas & Agrupamento por Classes */}
+      <div style={{ ...styles.dashboardBodyRow, marginTop: '1.5rem' }}>
         
         {/* Ações Críticas (flex: 1.2) */}
         <div style={{ ...styles.column, flex: 1.2 }}>
-          <div className="glass-panel" style={styles.panel}>
-            <div style={styles.panelHeader}>
-              <CheckSquare size={20} color="var(--primary)" />
-              <h3 style={styles.panelTitle}>Ações Críticas ("O que precisa ser feito")</h3>
+          <div className="glass-panel" style={{ ...styles.panel, height: '440px', justifyContent: 'space-between' }}>
+            <div>
+              <div style={styles.panelHeader}>
+                <CheckSquare size={20} color="var(--primary)" />
+                <h3 style={styles.panelTitle}>Ações Críticas ("O que precisa ser feito")</h3>
+              </div>
+              <p style={styles.panelDescription}>
+                Listagem imediata das condicionantes pendentes mais próximas do vencimento regulatório.
+              </p>
             </div>
-            <p style={styles.panelDescription}>
-              Listagem imediata das condicionantes pendentes mais próximas do vencimento regulatório.
-            </p>
 
-            <div style={styles.todoList}>
+            <div style={{ ...styles.todoList, flex: 1, overflowY: 'auto', marginTop: '0.5rem' }}>
               {urgentActions.length > 0 ? (
                 urgentActions.map(task => {
                   const isOverdue = isTaskOverdue(task);
@@ -752,17 +1046,19 @@ export default function Dashboard({ user, onNavigateTab }) {
 
         {/* Agrupamento por Classes de Condicionantes (flex: 1.8) */}
         <div style={{ ...styles.column, flex: 1.8 }}>
-          <div className="glass-panel" style={styles.panel}>
-            <div style={styles.panelHeader}>
-              <Award size={20} color="var(--primary)" />
-              <h3 style={styles.panelTitle}>Agrupamento por Classes de Condicionantes</h3>
+          <div className="glass-panel" style={{ ...styles.panel, height: '440px', justifyContent: 'space-between' }}>
+            <div>
+              <div style={styles.panelHeader}>
+                <Award size={20} color="var(--primary)" />
+                <h3 style={styles.panelTitle}>Agrupamento por Classes de Condicionantes</h3>
+              </div>
+              
+              <p style={styles.panelDescription}>
+                Visão consolidada de obrigações agrupadas por classe de serviço no período ({selectedPeriod}).
+              </p>
             </div>
-            
-            <p style={styles.panelDescription}>
-              Visão consolidada de obrigações agrupadas por classe de serviço no período ({selectedPeriod}).
-            </p>
 
-            <div style={styles.tableWrapper}>
+            <div style={{ ...styles.tableWrapper, flex: 1, overflowY: 'auto', marginTop: '0.5rem' }}>
               <table style={styles.table}>
                 <thead>
                   <tr>
@@ -778,9 +1074,9 @@ export default function Dashboard({ user, onNavigateTab }) {
                   {groupedClasses.length > 0 ? (
                     groupedClasses.map(group => {
                       const compliance = group.total > 0 ? Math.round((group.concluidas / group.total) * 100) : 100;
-                      const pConcl = (group.concluidas / group.total) * 100;
-                      const pProc = (group.emProcesso / group.total) * 100;
-                      const pPend = ((group.pendentes + group.atrasadas) / group.total) * 100;
+                      const pConcl = group.total > 0 ? (group.concluidas / group.total) * 100 : 0;
+                      const pProc = group.total > 0 ? (group.emProcesso / group.total) * 100 : 0;
+                      const pPend = group.total > 0 ? ((group.pendentes + group.atrasadas) / group.total) * 100 : 0;
 
                       return (
                         <tr key={group.id} style={styles.tr}>
@@ -825,216 +1121,6 @@ export default function Dashboard({ user, onNavigateTab }) {
                   )}
                 </tbody>
               </table>
-            </div>
-          </div>
-        </div>
-
-      </div>
-
-      {/* 2. SEÇÃO ESTRATÉGICA / ANALÍTICA: Previsão Financeira & Pizza & Comparativo */}
-      <div style={{ ...styles.dashboardBodyRow, marginTop: '1.5rem' }}>
-        
-        {/* Previsão Financeira Anual (flex: 1.5) */}
-        {(user.role === 'admin' || user.role === 'consultor') && (
-          <div style={{ ...styles.column, flex: 1.5 }}>
-            <div className="glass-panel" style={{ ...styles.panel, height: '360px' }}>
-              <div style={styles.panelHeader}>
-                <TrendingUp size={20} color="var(--primary)" />
-                <h3 style={styles.panelTitle}>Previsão Financeira Anual ({new Date().getFullYear()})</h3>
-              </div>
-              
-              <div style={styles.chartArea}>
-                <div style={styles.yAxis}>
-                  <span>{formatCurrency(maxRevenue)}</span>
-                  <span>{formatCurrency(maxRevenue / 2)}</span>
-                  <span>R$ 0,00</span>
-                </div>
-                
-                <div style={styles.chartScrollWrapper}>
-                  <div style={styles.barsContainer}>
-                    {anualData.map((mesData, index) => {
-                      const heightPercent = Math.max(((mesData.faturamento_condicionantes || 0) / maxRevenue) * 100, 4);
-                      const costHeightPercent = Math.max(((mesData.faturamento_renovacoes || 0) / maxRevenue) * 100, 4);
-                      return (
-                        <div key={index} style={styles.barColumn}>
-                          <div style={styles.barGroup}>
-                            <div 
-                              style={{ ...styles.bar, height: `${heightPercent}%`, background: 'var(--primary)' }}
-                              title={`Receita: ${formatCurrency(mesData.faturamento_condicionantes || 0)}`}
-                            ></div>
-                            <div 
-                              style={{ ...styles.bar, height: `${costHeightPercent}%`, background: 'var(--danger)' }}
-                              title={`Custos: ${formatCurrency(mesData.faturamento_renovacoes || 0)}`}
-                            ></div>
-                          </div>
-                          <span style={styles.barLabel}>{getMonthName(mesData.mes)}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-              <div style={styles.chartLegend}>
-                <div style={styles.legendItem}><div style={{ ...styles.legendDot, background: 'var(--primary)' }}></div><span>Receitas Estimadas</span></div>
-                <div style={styles.legendItem}><div style={{ ...styles.legendDot, background: 'var(--danger)' }}></div><span>Custos de Renovação</span></div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Principais Condicionantes (Gráfico de Pizza) (flex: 1) */}
-        <div style={{ ...styles.column, flex: 1 }}>
-          <div className="glass-panel" style={{ ...styles.panel, height: '360px', justifyContent: 'space-between' }}>
-            <div>
-              <div style={styles.panelHeader}>
-                <Award size={20} color="var(--primary)" />
-                <h3 style={styles.panelTitle}>Principais Condicionantes</h3>
-              </div>
-              <p style={styles.panelDescription}>
-                Distribuição das condicionantes mais frequentes no período ({selectedPeriod}).
-              </p>
-            </div>
-            
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '1rem',
-              flexWrap: 'wrap',
-              padding: '0.25rem 0',
-              flex: 1
-            }}>
-              {topCondicionantesPieData.total > 0 ? (
-                <>
-                  <div style={{ position: 'relative', width: '105px', height: '105px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <svg viewBox="0 0 100 100" style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }}>
-                      {topCondicionantesPieData.slices.map((slice, idx) => {
-                        const pathData = getSlicePath(slice.startPercent, slice.endPercent);
-                        return (
-                          <path
-                            key={idx}
-                            d={pathData}
-                            fill={pieColors[idx % pieColors.length]}
-                            style={{ transition: 'all 0.3s ease' }}
-                          />
-                        );
-                      })}
-                      <circle cx="50" cy="50" r="24" fill="var(--card-bg, #ffffff)" />
-                    </svg>
-                    <div style={{
-                      position: 'absolute',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      pointerEvents: 'none'
-                    }}>
-                      <span style={{ fontSize: '1.15rem', fontWeight: '800', color: 'var(--text-main)', lineHeight: 1 }}>
-                        {topCondicionantesPieData.total}
-                      </span>
-                      <span style={{ fontSize: '0.6rem', color: 'var(--text-light)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: '2px' }}>
-                        Total
-                      </span>
-                    </div>
-                  </div>
-
-                  <div style={{
-                    flex: 1,
-                    minWidth: '120px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '0.35rem'
-                  }}>
-                    {topCondicionantesPieData.slices.map((slice, idx) => (
-                      <div key={idx} style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: '0.4rem',
-                        fontSize: '0.76rem'
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', minWidth: 0, flex: 1 }}>
-                          <div style={{
-                            width: '6px',
-                            height: '6px',
-                            borderRadius: '50%',
-                            backgroundColor: pieColors[idx % pieColors.length],
-                            flexShrink: 0
-                          }}></div>
-                          <span style={{
-                            color: 'var(--text-main)',
-                            fontWeight: '500',
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis'
-                          }} title={slice.name}>
-                            {slice.name}
-                          </span>
-                        </div>
-                        <span style={{ color: 'var(--text-muted)', fontWeight: '700', flexShrink: 0 }}>
-                          {slice.value} ({Math.round(slice.percent * 100)}%)
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                  Nenhuma condicionante no período
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Visão Comparativa de Prazos (flex: 1) */}
-        <div style={{ ...styles.column, flex: 1 }}>
-          <div className="glass-panel" style={{ ...styles.panel, height: '360px', justifyContent: 'space-between' }}>
-            <div>
-              <div style={styles.panelHeader}>
-                <CalendarDays size={20} color="var(--primary)" />
-                <h3 style={styles.panelTitle}>Visão Comparativa de Prazos</h3>
-              </div>
-              <p style={styles.panelDescription}>
-                Proporção de status de condicionantes mensais, bimestrais e trimestrais.
-              </p>
-            </div>
-            
-            <div style={{ ...styles.comparisonList, flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '0.75rem' }}>
-              {comparativePeriods.map(period => {
-                const compliance = period.total > 0 ? Math.round((period.concl / period.total) * 100) : 100;
-                const pConcl = period.total > 0 ? (period.concl / period.total) * 100 : 0;
-                const pProc = period.total > 0 ? (period.proc / period.total) * 100 : 0;
-                const pPend = period.total > 0 ? ((period.pend + period.atras) / period.total) * 100 : 0;
-
-                return (
-                  <div key={period.key} style={styles.comparisonItem}>
-                    <div style={styles.comparisonLabelRow}>
-                      <span style={styles.comparisonName}>{period.label}</span>
-                      <span style={styles.comparisonDetails}>
-                        Total: <strong>{period.total}</strong> | Compliance: <strong style={{ color: compliance >= 80 ? 'var(--success)' : 'var(--danger)' }}>{compliance}%</strong>
-                      </span>
-                    </div>
-                    <div style={styles.comparisonBarOuter}>
-                      {period.total > 0 ? (
-                        <>
-                          {pConcl > 0 && <div style={{ ...styles.comparisonBarInner, width: `${pConcl}%`, background: 'var(--success)' }} title={`Concluídas: ${Math.round(pConcl)}%`}></div>}
-                          {pProc > 0 && <div style={{ ...styles.comparisonBarInner, width: `${pProc}%`, background: '#eab308' }} title={`Em Processo: ${Math.round(pProc)}%`}></div>}
-                          {pPend > 0 && <div style={{ ...styles.comparisonBarInner, width: `${pPend}%`, background: 'var(--danger)' }} title={`Pendente/Atrasada: ${Math.round(pPend)}%`}></div>}
-                        </>
-                      ) : (
-                        <div style={styles.comparisonBarEmpty}>Nenhuma obrigação</div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div style={{ ...styles.chartLegend, marginTop: '0.5rem' }}>
-              <div style={styles.legendItem}><div style={{ ...styles.legendDot, background: 'var(--success)' }}></div><span>Concluídas</span></div>
-              <div style={styles.legendItem}><div style={{ ...styles.legendDot, background: '#eab308' }}></div><span>Em Processo</span></div>
-              <div style={styles.legendItem}><div style={{ ...styles.legendDot, background: 'var(--danger)' }}></div><span>Pendentes / Atrasadas</span></div>
             </div>
           </div>
         </div>
