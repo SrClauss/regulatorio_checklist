@@ -17,11 +17,42 @@ import {
   Search,
   SlidersHorizontal,
   TrendingUp,
-  ChevronDown
+  ChevronDown,
+  Info,
+  ZoomIn,
+  ZoomOut
 } from 'lucide-react';
 
 export default function Cronograma({ user, onViewTask, onViewDocument, onNavigateTab }) {
-  const [activeTab, setActiveTab] = useState('timeline'); // 'timeline', 'kanban', 'gantt', 'radar', 'lista'
+  const [activeTab, setActiveTab] = useState('planilha'); // 'planilha', 'timeline', 'lista'
+
+  // Auxiliar para obter o período de meses padrão
+  const getPlanilhaDefaultDates = () => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 4, 0); // último dia do mês atual + 3
+    return {
+      start: start.toISOString().split('T')[0],
+      end: end.toISOString().split('T')[0]
+    };
+  };
+
+  // Estados do intervalo de data da Planilha Operacional
+  const [planilhaDataInicio, setPlanilhaDataInicio] = useState(() => {
+    return localStorage.getItem('planilha_data_inicio') || getPlanilhaDefaultDates().start;
+  });
+  const [planilhaDataFim, setPlanilhaDataFim] = useState(() => {
+    return localStorage.getItem('planilha_data_fim') || getPlanilhaDefaultDates().end;
+  });
+
+  // Novos filtros solicitados pelo usuário
+  const [selectedDocumentId, setSelectedDocumentId] = useState('');
+  const [minValor, setMinValor] = useState('');
+  const [maxValor, setMaxValor] = useState('');
+
+  // Estado e timers de hover para o tooltip rico
+  const [hoveredTaskForTooltip, setHoveredTaskForTooltip] = useState(null);
+  const planilhaHoverTimerRef = useRef(null);
   
   const [todasTarefas, setTodasTarefas] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -160,7 +191,12 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
       setLoadingTasks(true);
       let dateStart, dateEnd;
 
-      if (dateOrStartOffset instanceof Date) {
+      if (typeof dateOrStartOffset === 'string') {
+        // Formato string (ex: "YYYY-MM-DD") para o intervalo da planilha
+        dateStart = new Date(dateOrStartOffset + 'T00:00:00').toISOString();
+        const endD = new Date(endOffset + 'T23:59:59');
+        dateEnd = endD.toISOString();
+      } else if (dateOrStartOffset instanceof Date) {
         const centerDate = dateOrStartOffset;
         dateStart = new Date(centerDate.getFullYear(), centerDate.getMonth() - 1, 1).toISOString();
         dateEnd = new Date(centerDate.getFullYear(), centerDate.getMonth() + 2, 1).toISOString();
@@ -229,7 +265,9 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
 
   useEffect(() => {
     if (!loading) {
-      if (activeTab === 'lista') {
+      if (activeTab === 'planilha') {
+        fetchTasks(selectedCompanyId, selectedClasseServicoId, planilhaDataInicio, planilhaDataFim);
+      } else if (activeTab === 'lista') {
         const now = new Date();
         const startOfGrid = new Date(gridYear, gridStartMonth, 1);
         const endOfGrid = new Date(gridYear, gridStartMonth + 6, 0);
@@ -245,7 +283,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
         fetchTasks(selectedCompanyId, selectedClasseServicoId, centerMonthDate);
       }
     }
-  }, [selectedCompanyId, selectedClasseServicoId, centerMonthDate, activeTab, gridYear, gridStartMonth, loading]);
+  }, [selectedCompanyId, selectedClasseServicoId, centerMonthDate, activeTab, gridYear, gridStartMonth, planilhaDataInicio, planilhaDataFim, loading]);
 
   const handleScroll = (e) => {
     const container = e.currentTarget;
@@ -478,14 +516,192 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
     }
   };
 
-  // --- FILTROS GLOBAIS DO CRONOGRAMA ---
   const tasksFiltered = useMemo(() => {
     return todasTarefas.filter(t => {
       if (selectedClasseServicoId && t.classe_servico_id !== selectedClasseServicoId) return false;
       if (selectedCompanyId && t.empresa_id !== selectedCompanyId) return false;
+      if (selectedDocumentId && t.documento_id !== selectedDocumentId) return false;
+      if (minValor !== '' && (t.valor_estimado === undefined || t.valor_estimado === null || Number(t.valor_estimado) < Number(minValor))) return false;
+      if (maxValor !== '' && (t.valor_estimado === undefined || t.valor_estimado === null || Number(t.valor_estimado) > Number(maxValor))) return false;
       return true;
     });
-  }, [todasTarefas, selectedClasseServicoId, selectedCompanyId]);
+  }, [todasTarefas, selectedClasseServicoId, selectedCompanyId, selectedDocumentId, minValor, maxValor]);
+
+  // --- HOOKS DA PLANILHA OPERACIONAL ---
+  const planilhaColumns = useMemo(() => {
+    const columns = [];
+    const start = new Date(planilhaDataInicio + 'T00:00:00');
+    const end = new Date(planilhaDataFim + 'T00:00:00');
+    
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) return [];
+    
+    const current = new Date(start.getFullYear(), start.getMonth(), 1);
+    const limit = new Date(end.getFullYear(), end.getMonth(), 1);
+    
+    const monthAbbrs = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+    
+    let iterations = 0;
+    while (current <= limit && iterations < 36) {
+      iterations++;
+      const m = monthAbbrs[current.getMonth()];
+      const y = current.getFullYear().toString().slice(-2);
+      columns.push({
+        label: `${m}/${y}`,
+        month: current.getMonth(),
+        year: current.getFullYear(),
+        key: `${current.getFullYear()}-${current.getMonth()}`
+      });
+      current.setMonth(current.getMonth() + 1);
+    }
+    return columns;
+  }, [planilhaDataInicio, planilhaDataFim]);
+
+  const planilhaTasks = useMemo(() => {
+    return tasksFiltered.filter(t => {
+      if (!t.data_vencimento) return false;
+      const d = new Date(t.data_vencimento);
+      const start = new Date(planilhaDataInicio + 'T00:00:00');
+      const end = new Date(planilhaDataFim + 'T00:00:00');
+      
+      const startMs = new Date(start.getFullYear(), start.getMonth(), 1).getTime();
+      const endMs = new Date(end.getFullYear(), end.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
+      
+      const tMs = d.getTime();
+      return tMs >= startMs && tMs <= endMs;
+    });
+  }, [tasksFiltered, planilhaDataInicio, planilhaDataFim]);
+
+  const planilhaCompanyRows = useMemo(() => {
+    const companyTasksMap = {};
+    
+    planilhaTasks.forEach(t => {
+      const taskDate = new Date(t.data_vencimento);
+      const taskMonth = taskDate.getMonth();
+      const taskYear = taskDate.getFullYear();
+      const key = `${taskYear}-${taskMonth}`;
+      
+      const hasCol = planilhaColumns.some(col => col.key === key);
+      if (hasCol) {
+        if (!companyTasksMap[t.empresa_id]) {
+          companyTasksMap[t.empresa_id] = {};
+          planilhaColumns.forEach(col => {
+            companyTasksMap[t.empresa_id][col.key] = [];
+          });
+        }
+        companyTasksMap[t.empresa_id][key].push(t);
+      }
+    });
+    
+    const rows = [];
+    Object.keys(companyTasksMap).forEach(companyId => {
+      const monthTasks = companyTasksMap[companyId];
+      
+      let maxTasks = 0;
+      planilhaColumns.forEach(col => {
+        if (monthTasks[col.key].length > maxTasks) {
+          maxTasks = monthTasks[col.key].length;
+        }
+      });
+      
+      if (maxTasks > 0) {
+        rows.push({
+          companyId,
+          companyName: getEmpresaNome(companyId),
+          rowsCount: maxTasks,
+          monthTasks
+        });
+      }
+    });
+    
+    rows.sort((a, b) => {
+      const nameA = a.companyName || '';
+      const nameB = b.companyName || '';
+      return nameA.localeCompare(nameB);
+    });
+    
+    return rows;
+  }, [planilhaTasks, planilhaColumns, empresas]);
+
+  // --- HANDLERS DA PLANILHA OPERACIONAL ---
+  const handlePlanilhaDataInicioChange = (val) => {
+    setPlanilhaDataInicio(val);
+    localStorage.setItem('planilha_data_inicio', val);
+  };
+
+  const handlePlanilhaDataFimChange = (val) => {
+    setPlanilhaDataFim(val);
+    localStorage.setItem('planilha_data_fim', val);
+  };
+
+  const handleZoomOut = () => {
+    const start = new Date(planilhaDataInicio + 'T00:00:00');
+    const end = new Date(planilhaDataFim + 'T00:00:00');
+    
+    // Zoom out: expande 1 mês para o início e 1 mês para o fim
+    start.setMonth(start.getMonth() - 1);
+    end.setMonth(end.getMonth() + 1);
+    
+    const startStr = start.toISOString().split('T')[0];
+    const endStr = end.toISOString().split('T')[0];
+    
+    setPlanilhaDataInicio(startStr);
+    setPlanilhaDataFim(endStr);
+    localStorage.setItem('planilha_data_inicio', startStr);
+    localStorage.setItem('planilha_data_fim', endStr);
+  };
+
+  const handleZoomIn = () => {
+    const start = new Date(planilhaDataInicio + 'T00:00:00');
+    const end = new Date(planilhaDataFim + 'T00:00:00');
+    
+    // Zoom in: contrai 1 mês de cada lado
+    start.setMonth(start.getMonth() + 1);
+    end.setMonth(end.getMonth() - 1);
+    
+    if (start <= end) {
+      const startStr = start.toISOString().split('T')[0];
+      const endStr = end.toISOString().split('T')[0];
+      
+      setPlanilhaDataInicio(startStr);
+      setPlanilhaDataFim(endStr);
+      localStorage.setItem('planilha_data_inicio', startStr);
+      localStorage.setItem('planilha_data_fim', endStr);
+    }
+  };
+
+  const handleResetPlanilhaDates = () => {
+    const defaults = getPlanilhaDefaultDates();
+    setPlanilhaDataInicio(defaults.start);
+    setPlanilhaDataFim(defaults.end);
+    localStorage.setItem('planilha_data_inicio', defaults.start);
+    localStorage.setItem('planilha_data_fim', defaults.end);
+  };
+
+  const handlePlanilhaCellMouseEnter = (task, event) => {
+    if (planilhaHoverTimerRef.current) {
+      clearTimeout(planilhaHoverTimerRef.current);
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    const position = {
+      top: rect.bottom + window.scrollY,
+      left: rect.left + window.scrollX
+    };
+    planilhaHoverTimerRef.current = setTimeout(() => {
+      setHoveredTaskForTooltip({ task, position });
+    }, 500); // 500ms delay
+  };
+
+  const handlePlanilhaCellMouseLeave = () => {
+    if (planilhaHoverTimerRef.current) {
+      clearTimeout(planilhaHoverTimerRef.current);
+      planilhaHoverTimerRef.current = null;
+    }
+    setHoveredTaskForTooltip(null);
+  };
+
+  const formatTaskValue = (val) => {
+    return val ? Number(val).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00';
+  };
 
   const tasksByMonthKey = useMemo(() => {
     const groups = {};
@@ -643,6 +859,317 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                 </div>
               );
             })
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // ==========================================
+  // VIEW 0: PLANILHA OPERACIONAL (SPREADSHEET)
+  // ==========================================
+  const renderPlanilhaView = () => {
+    let globalRowIndex = 0;
+    
+    return (
+      <div className="glass-panel animate-fade-in" style={{
+        ...styles.planilhaContainer,
+        flex: isMobile ? 'none' : 1,
+        minHeight: isMobile ? 'none' : 0,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: isMobile ? 'visible' : 'hidden'
+      }}>
+        {/* Barra superior de título */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.75rem' }}>
+          <div>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--text-main)' }}>Planilha Operacional</h3>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Visão panorâmica e compacta das condicionantes e seus valores.</p>
+          </div>
+          
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            {(selectedCompanyId || selectedClasseServicoId || selectedDocumentId || minValor || maxValor) && (
+              <button 
+                style={styles.clearFilterHeaderBtn} 
+                onClick={() => {
+                  setSelectedCompanyId('');
+                  setSelectedClasseServicoId(null);
+                  setSelectedDocumentId('');
+                  setMinValor('');
+                  setMaxValor('');
+                }}
+              >
+                <X size={12} />
+                <span>Limpar Filtros</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Barra de Filtros Inteligentes (Cliente - Serviço - Documento - Datas - Valores) */}
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0.75rem',
+          padding: '0.75rem',
+          background: 'rgba(255, 255, 255, 0.35)',
+          borderRadius: '12px',
+          border: '1px solid var(--glass-border)',
+          marginBottom: '1rem',
+        }}>
+          {/* Linha 1: Período e Zoom */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <div style={styles.filterGroup}>
+                <label style={styles.filterLabel}>De:</label>
+                <input 
+                  type="date" 
+                  value={planilhaDataInicio} 
+                  onChange={e => handlePlanilhaDataInicioChange(e.target.value)} 
+                  className="glass-input"
+                  style={{ ...styles.listSelect, width: '130px', padding: '4px 8px', fontSize: '0.75rem' }}
+                />
+              </div>
+              <div style={styles.filterGroup}>
+                <label style={styles.filterLabel}>Até:</label>
+                <input 
+                  type="date" 
+                  value={planilhaDataFim} 
+                  onChange={e => handlePlanilhaDataFimChange(e.target.value)} 
+                  className="glass-input"
+                  style={{ ...styles.listSelect, width: '130px', padding: '4px 8px', fontSize: '0.75rem' }}
+                />
+              </div>
+              
+              <div style={{ display: 'flex', gap: '4px' }}>
+                <button 
+                  onClick={handleZoomOut} 
+                  style={styles.actionPlanilhaBtn} 
+                  title="Zoom Out (Expandir Meses)"
+                >
+                  <ZoomOut size={14} />
+                </button>
+                <button 
+                  onClick={handleZoomIn} 
+                  style={styles.actionPlanilhaBtn} 
+                  title="Zoom In (Contrair Meses)"
+                >
+                  <ZoomIn size={14} />
+                </button>
+                <button 
+                  onClick={handleResetPlanilhaDates} 
+                  style={{ ...styles.actionPlanilhaBtn, fontSize: '0.7rem', padding: '4px 8px', fontWeight: 'bold' }} 
+                  title="Restaurar período padrão de 4 meses"
+                >
+                  Padrão
+                </button>
+              </div>
+            </div>
+
+            {/* Filtros de Valores */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <div style={styles.filterGroup}>
+                <label style={styles.filterLabel}>R$ Mín:</label>
+                <input 
+                  type="number" 
+                  placeholder="Mín"
+                  value={minValor} 
+                  onChange={e => setMinValor(e.target.value)} 
+                  className="glass-input"
+                  style={{ ...styles.listSelect, width: '95px', padding: '4px 8px', fontSize: '0.75rem' }}
+                />
+              </div>
+              <div style={styles.filterGroup}>
+                <label style={styles.filterLabel}>R$ Máx:</label>
+                <input 
+                  type="number" 
+                  placeholder="Máx"
+                  value={maxValor} 
+                  onChange={e => setMaxValor(e.target.value)} 
+                  className="glass-input"
+                  style={{ ...styles.listSelect, width: '95px', padding: '4px 8px', fontSize: '0.75rem' }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Linha 2: Entidades (Cliente, Serviço, Documento) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+            <div style={styles.filterGroup}>
+              <label style={styles.filterLabel}>Cliente:</label>
+              <select 
+                style={{ ...styles.listSelect, padding: '4px 8px', fontSize: '0.75rem', minWidth: '150px' }}
+                value={selectedCompanyId || ''}
+                onChange={(e) => setSelectedCompanyId(e.target.value || '')}
+              >
+                <option value="">Todos os Clientes</option>
+                {empresas.map(e => (
+                  <option key={e._id} value={e._id}>{e.nome_fantasia}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={styles.filterGroup}>
+              <label style={styles.filterLabel}>Serviço:</label>
+              <select 
+                style={{ ...styles.listSelect, padding: '4px 8px', fontSize: '0.75rem', minWidth: '150px' }}
+                value={selectedClasseServicoId || ''}
+                onChange={(e) => setSelectedClasseServicoId(e.target.value || null)}
+              >
+                <option value="">Todos os Serviços</option>
+                {classeServicos.map(cs => (
+                  <option key={cs._id} value={cs._id}>{cs.nome}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={styles.filterGroup}>
+              <label style={styles.filterLabel}>Documento:</label>
+              <select 
+                style={{ ...styles.listSelect, padding: '4px 8px', fontSize: '0.75rem', minWidth: '180px' }}
+                value={selectedDocumentId || ''}
+                onChange={(e) => setSelectedDocumentId(e.target.value || '')}
+              >
+                <option value="">Todos os Documentos</option>
+                {documentos.map(d => (
+                  <option key={d._id} value={d._id}>{d.tipo} {d.numero ? `(${d.numero})` : ''}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Tabela de Dados */}
+        <div style={{
+          ...styles.planilhaTableWrapper,
+          overflowY: isMobile ? 'visible' : 'auto'
+        }}>
+          {planilhaColumns.length === 0 ? (
+            <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+              Período selecionado inválido. Selecione datas corretas.
+            </div>
+          ) : (
+            <table style={styles.planilhaTable}>
+              <thead>
+                <tr>
+                  <th rowSpan={2} style={{ ...styles.planilhaTh, width: '35px' }}>Nº</th>
+                  <th rowSpan={2} style={{ ...styles.planilhaTh, width: '180px' }}>Nome do Cliente</th>
+                  {planilhaColumns.map(col => (
+                    <th key={col.key} colSpan={2} style={styles.planilhaTh}>
+                      {col.label.toUpperCase()}
+                    </th>
+                  ))}
+                </tr>
+                <tr>
+                  {planilhaColumns.map(col => (
+                    <React.Fragment key={`${col.key}-sub`}>
+                      <th style={styles.planilhaThSub}>Serviço a executar</th>
+                      <th style={styles.planilhaThSub}>R$ do serviço</th>
+                    </React.Fragment>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {planilhaCompanyRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={planilhaColumns.length * 2 + 2} style={{ padding: '1rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                      Nenhuma condicionante encontrada para os filtros selecionados.
+                    </td>
+                  </tr>
+                ) : (
+                  planilhaCompanyRows.flatMap((comp) => {
+                    const rows = [];
+                    for (let i = 0; i < comp.rowsCount; i++) {
+                      globalRowIndex++;
+                      const isFirstRow = i === 0;
+                      
+                      rows.push(
+                        <tr key={`${comp.companyId}-plan-row-${i}`} style={{ borderBottom: i === comp.rowsCount - 1 ? '1px solid rgba(0,0,0,0.12)' : 'none' }}>
+                          {/* Nº da Linha */}
+                          <td style={styles.planilhaTdIndex}>
+                            {globalRowIndex}
+                          </td>
+                          
+                          {/* Nome do Cliente (Mergeado via rowSpan) */}
+                          {isFirstRow && (
+                            <td 
+                              rowSpan={comp.rowsCount} 
+                              style={styles.planilhaTdClient}
+                            >
+                              {comp.companyName}
+                            </td>
+                          )}
+                          
+                          {/* Meses */}
+                          {planilhaColumns.map(col => {
+                            const tasksInCol = comp.monthTasks[col.key] || [];
+                            const task = tasksInCol[i];
+                            
+                            return (
+                              <React.Fragment key={col.key}>
+                                <td style={styles.planilhaTdTask}>
+                                  {task ? (
+                                    <div 
+                                      style={{
+                                        ...styles.planilhaTaskWrapper,
+                                        borderLeft: `3px solid ${getTaskStatusColor(task)}`,
+                                        background: `${getTaskStatusColor(task)}15`
+                                      }}
+                                      onClick={() => onViewTask && onViewTask(task._id)}
+                                      onMouseEnter={(e) => handlePlanilhaCellMouseEnter(task, e)}
+                                      onMouseLeave={handlePlanilhaCellMouseLeave}
+                                    >
+                                      <span style={styles.planilhaTaskTitle}>
+                                        {task.titulo}
+                                      </span>
+                                      <span style={styles.planilhaInfoIcon}>
+                                        <Info size={11} style={{ color: getTaskStatusColor(task) }} />
+                                      </span>
+                                    </div>
+                                  ) : '-'}
+                                </td>
+                                <td style={styles.planilhaTdValue}>
+                                  {task ? `R$ ${formatTaskValue(task.valor_estimado)}` : '-'}
+                                </td>
+                              </React.Fragment>
+                            );
+                          })}
+                        </tr>
+                      );
+                    }
+                    return rows;
+                  })
+                )}
+              </tbody>
+              <tfoot>
+                {/* Linha de Totais */}
+                <tr style={styles.planilhaTotalRow}>
+                  <td colSpan={2} style={styles.planilhaTotalLabel}>
+                    R$ TOTAL
+                  </td>
+                  {planilhaColumns.map(col => {
+                    let colTotal = 0;
+                    planilhaCompanyRows.forEach(comp => {
+                      const tasksInCol = comp.monthTasks[col.key] || [];
+                      tasksInCol.forEach(t => {
+                        colTotal += Number(t.valor_estimado) || 0;
+                      });
+                    });
+                    
+                    return (
+                      <React.Fragment key={col.key}>
+                        <td style={styles.planilhaTotalLabel}>
+                          R$ total
+                        </td>
+                        <td style={styles.planilhaTotalVal}>
+                          R$ {colTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                      </React.Fragment>
+                    );
+                  })}
+                </tr>
+              </tfoot>
+            </table>
           )}
         </div>
       </div>
@@ -1567,7 +2094,11 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
     });
 
     // Ordenar empresas em ordem alfabética
-    companyRows.sort((a, b) => a.companyName.localeCompare(b.companyName));
+    companyRows.sort((a, b) => {
+      const nameA = a.companyName || '';
+      const nameB = b.companyName || '';
+      return nameA.localeCompare(nameB);
+    });
 
     // Obter lista dinâmica de anos disponíveis nas tarefas
     const getYearsOptions = () => {
@@ -1835,6 +2366,155 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
     );
   };
 
+  const renderTooltip = () => {
+    if (!hoveredTaskForTooltip) return null;
+    const { task, position } = hoveredTaskForTooltip;
+    
+    const color = getTaskStatusColor(task);
+    
+    // Obter badge style baseado no status
+    let badgeStyle = {
+      background: 'rgba(59, 130, 246, 0.1)',
+      color: '#3b82f6',
+      border: '1px solid rgba(59, 130, 246, 0.2)'
+    };
+    if (task.status === 'Concluído') {
+      badgeStyle = {
+        background: 'rgba(16, 185, 129, 0.1)',
+        color: '#10b981',
+        border: '1px solid rgba(16, 185, 129, 0.2)'
+      };
+    } else if (isTaskOverdue(task)) {
+      badgeStyle = {
+        background: 'rgba(239, 68, 68, 0.1)',
+        color: '#ef4444',
+        border: '1px solid rgba(239, 68, 68, 0.2)'
+      };
+    } else if (task.status === 'Em Andamento' || task.status === 'Aguardando Auditoria') {
+      badgeStyle = {
+        background: 'rgba(234, 179, 8, 0.1)',
+        color: '#ca8a04',
+        border: '1px solid rgba(234, 179, 8, 0.2)'
+      };
+    }
+    
+    const empresaNome = getEmpresaNome(task.empresa_id) || 'Não informada';
+    const csNome = getClasseServicoNome(task.classe_servico_id) || 'Não informada';
+    const docInfo = getDocumentoInfo(task.documento_id) || 'Nenhum';
+    const prestadorNome = getPrestadorNome(task.classe_servico_id) || 'Não designado';
+    
+    const tooltipStyle = {
+      position: 'absolute',
+      top: `${position.top + 8}px`,
+      left: `${Math.min(position.left, window.innerWidth - 320)}px`,
+      zIndex: 9999,
+      width: '300px',
+      background: 'rgba(255, 255, 255, 0.95)',
+      backdropFilter: 'blur(16px)',
+      border: '1px solid rgba(255, 255, 255, 0.4)',
+      borderLeft: `6px solid ${color}`,
+      borderRadius: '12px',
+      boxShadow: '0 12px 40px rgba(0, 0, 0, 0.15)',
+      padding: '0.85rem',
+      color: '#1e293b',
+      fontFamily: 'var(--font-main)',
+      fontSize: '0.75rem',
+      textAlign: 'left',
+      pointerEvents: 'auto',
+      transition: 'opacity 0.2s ease',
+    };
+    
+    return (
+      <div 
+        style={tooltipStyle} 
+        onMouseEnter={() => {
+          if (planilhaHoverTimerRef.current) {
+            clearTimeout(planilhaHoverTimerRef.current);
+          }
+        }}
+        onMouseLeave={handlePlanilhaCellMouseLeave}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+          <span style={{ fontSize: '0.65rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            {empresaNome}
+          </span>
+          <span style={{ 
+            fontSize: '0.65rem', 
+            fontWeight: '700', 
+            padding: '2px 6px', 
+            borderRadius: '4px',
+            ...badgeStyle 
+          }}>
+            {task.status}
+          </span>
+        </div>
+        
+        <h4 style={{ fontSize: '0.85rem', fontWeight: '700', margin: '0 0 8px 0', color: '#0f172a', lineHeight: '1.25' }}>
+          {task.titulo}
+        </h4>
+        
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: '6px', marginBottom: '8px', color: '#475569' }}>
+          <div><strong>Classe:</strong> {csNome}</div>
+          <div><strong>Vencimento:</strong> {new Date(task.data_vencimento).toLocaleDateString('pt-BR')}</div>
+          <div><strong>Valor Estimado:</strong> R$ {formatTaskValue(task.valor_estimado)}</div>
+          {task.data_conclusao && <div><strong>Concluído em:</strong> {new Date(task.data_conclusao).toLocaleDateString('pt-BR')}</div>}
+          <div><strong>Documento:</strong> {docInfo}</div>
+          {prestadorNome && <div><strong>Prestador:</strong> {prestadorNome}</div>}
+        </div>
+        
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px', borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: '6px' }}>
+          {task.status !== 'Concluído' && (
+            <button 
+              onClick={async (e) => {
+                e.stopPropagation();
+                try {
+                  await api.updateTarefa(task._id, { status: 'Concluído', data_conclusao: new Date().toISOString() });
+                  await fetchTasks(selectedCompanyId, selectedClasseServicoId, planilhaDataInicio, planilhaDataFim);
+                } catch (err) {
+                  console.error("Erro ao concluir tarefa via tooltip:", err);
+                }
+                handlePlanilhaCellMouseLeave();
+              }}
+              style={{
+                border: 'none',
+                background: 'rgba(16, 185, 129, 0.1)',
+                color: '#10b981',
+                padding: '4px 8px',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontWeight: '600',
+                fontSize: '0.7rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+            >
+              <CheckCircle2 size={11} /> Concluir
+            </button>
+          )}
+          <button 
+            onClick={() => {
+              onViewTask && onViewTask(task._id);
+              handlePlanilhaCellMouseLeave();
+            }}
+            style={{
+              border: 'none',
+              background: 'rgba(59, 130, 246, 0.1)',
+              color: '#3b82f6',
+              padding: '4px 8px',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontWeight: '600',
+              fontSize: '0.7rem'
+            }}
+          >
+            Acessar
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   // --- Render Geral da Tela ---
   if (loading) {
     return (
@@ -1884,16 +2564,16 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
       {/* Tabs Principais de Visualizações */}
       <div style={styles.tabsContainer}>
         <button 
+          style={activeTab === 'planilha' ? styles.activeTab : styles.tab} 
+          onClick={() => setActiveTab('planilha')}
+        >
+          <CalendarDays size={18} /> Planilha Operacional
+        </button>
+        <button 
           style={activeTab === 'timeline' ? styles.activeTab : styles.tab} 
           onClick={() => setActiveTab('timeline')}
         >
           <Activity size={18} /> Linha do Tempo Stacked
-        </button>
-        <button 
-          style={activeTab === 'kanban' ? styles.activeTab : styles.tab} 
-          onClick={() => setActiveTab('kanban')}
-        >
-          <LayoutList size={18} /> Quadro Kanban
         </button>
         <button 
           style={activeTab === 'lista' ? styles.activeTab : styles.tab} 
@@ -1933,10 +2613,12 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
         flexDirection: isMobile ? 'row' : 'column',
         overflow: isMobile ? 'visible' : 'hidden'
       }}>
+        {activeTab === 'planilha' && renderPlanilhaView()}
         {activeTab === 'timeline' && renderTimelineView()}
-        {activeTab === 'kanban' && renderKanbanView()}
         {activeTab === 'lista' && renderListaView()}
       </div>
+
+      {renderTooltip()}
     </div>
   );
 }
@@ -3261,5 +3943,143 @@ const styles = {
     fontWeight: '600',
     color: 'var(--primary)',
     textAlign: 'center',
+  },
+  // --- ESTILOS PLANILHA OPERACIONAL ---
+  planilhaContainer: {
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
+  },
+  planilhaTableWrapper: {
+    overflowX: 'auto',
+    overflowY: 'auto',
+    borderRadius: '12px',
+    border: '1px solid var(--glass-border)',
+    background: 'rgba(255, 255, 255, 0.25)',
+    boxShadow: 'var(--shadow-sm)',
+    flex: 1,
+    minHeight: 0,
+    padding: '2px',
+  },
+  planilhaTable: {
+    width: '100%',
+    borderCollapse: 'collapse',
+    textAlign: 'left',
+    fontSize: '11px',
+    fontFamily: 'var(--font-main)',
+  },
+  planilhaTh: {
+    padding: '4px 6px',
+    fontSize: '11px',
+    fontWeight: '700',
+    color: 'var(--text-main)',
+    border: '1px solid rgba(0,0,0,0.12)',
+    background: 'rgba(240, 244, 248, 0.85)',
+    textAlign: 'center',
+  },
+  planilhaThSub: {
+    padding: '4px 6px',
+    fontSize: '10px',
+    fontWeight: '600',
+    color: 'var(--text-muted)',
+    border: '1px solid rgba(0,0,0,0.12)',
+    background: 'rgba(245, 247, 250, 0.8)',
+    textAlign: 'center',
+  },
+  planilhaTdIndex: {
+    padding: '4px 6px',
+    fontSize: '10px',
+    fontWeight: '600',
+    color: 'var(--text-muted)',
+    textAlign: 'center',
+    border: '1px solid rgba(0,0,0,0.08)',
+    background: 'rgba(0,0,0,0.02)',
+  },
+  planilhaTdClient: {
+    padding: '4px 6px',
+    fontSize: '11px',
+    fontWeight: '600',
+    color: 'var(--text-main)',
+    border: '1px solid rgba(0,0,0,0.08)',
+    background: 'rgba(255, 255, 255, 0.55)',
+    verticalAlign: 'middle',
+    textAlign: 'left',
+  },
+  planilhaTdTask: {
+    padding: '3px 6px',
+    border: '1px solid rgba(0,0,0,0.08)',
+    background: 'rgba(255, 255, 255, 0.25)',
+    verticalAlign: 'middle',
+    minWidth: '130px',
+    maxWidth: '220px',
+  },
+  planilhaTdValue: {
+    padding: '3px 6px',
+    border: '1px solid rgba(0,0,0,0.08)',
+    background: 'rgba(255, 255, 255, 0.15)',
+    verticalAlign: 'middle',
+    textAlign: 'right',
+    color: 'var(--text-main)',
+    fontWeight: '600',
+    whiteSpace: 'nowrap',
+    width: '85px',
+  },
+  planilhaTaskWrapper: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '2px 4px',
+    background: 'rgba(255, 255, 255, 0.65)',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+    overflow: 'hidden',
+  },
+  planilhaTaskTitle: {
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    marginRight: '4px',
+    color: 'var(--text-main)',
+    fontWeight: '550',
+    flex: 1,
+    textAlign: 'left',
+  },
+  planilhaInfoIcon: {
+    display: 'flex',
+    alignItems: 'center',
+    opacity: 0.8,
+  },
+  actionPlanilhaBtn: {
+    border: 'none',
+    background: 'rgba(255, 255, 255, 0.5)',
+    borderRadius: '4px',
+    padding: '4px 6px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    transition: 'background 0.2s',
+  },
+  planilhaTotalRow: {
+    background: '#fef08a',
+    fontWeight: '700',
+  },
+  planilhaTotalLabel: {
+    padding: '4px 6px',
+    fontSize: '11px',
+    color: '#854d0e',
+    border: '1px solid rgba(0,0,0,0.12)',
+    textAlign: 'right',
+    fontWeight: '700',
+  },
+  planilhaTotalVal: {
+    padding: '4px 6px',
+    fontSize: '11px',
+    color: '#854d0e',
+    border: '1px solid rgba(0,0,0,0.12)',
+    textAlign: 'right',
+    fontWeight: '700',
+    whiteSpace: 'nowrap',
   },
 };
