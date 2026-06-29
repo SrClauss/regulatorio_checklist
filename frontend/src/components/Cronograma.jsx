@@ -161,12 +161,22 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
     };
   };
 
-  // Estados do intervalo de data da Planilha Operacional
+  const getEndOfMonthDateString = (yearMonthStr) => {
+    if (!yearMonthStr) return '';
+    if (yearMonthStr.length > 7) return yearMonthStr; // Já é YYYY-MM-DD
+    const [year, month] = yearMonthStr.split('-');
+    const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+    return `${yearMonthStr}-${String(lastDay).padStart(2, '0')}`;
+  };
+
+  // Estados do intervalo de data da Planilha Operacional (no formato YYYY-MM)
   const [planilhaDataInicio, setPlanilhaDataInicio] = useState(() => {
-    return localStorage.getItem('planilha_data_inicio') || getPlanilhaDefaultDates().start;
+    const val = localStorage.getItem('planilha_data_inicio') || getPlanilhaDefaultDates().start;
+    return val.substring(0, 7);
   });
   const [planilhaDataFim, setPlanilhaDataFim] = useState(() => {
-    return localStorage.getItem('planilha_data_fim') || getPlanilhaDefaultDates().end;
+    const val = localStorage.getItem('planilha_data_fim') || getPlanilhaDefaultDates().end;
+    return val.substring(0, 7);
   });
 
   // Novos filtros solicitados pelo usuário
@@ -179,6 +189,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   const planilhaHoverTimerRef = useRef(null);
   const planilhaRef = useRef(null);
   const [planilhaZoomLevel, setPlanilhaZoomLevel] = useState(1.0);
+  const [planilhaFocusedMonth, setPlanilhaFocusedMonth] = useState(null);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -326,9 +337,10 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
       let dateStart, dateEnd;
 
       if (typeof dateOrStartOffset === 'string') {
-        // Formato string (ex: "YYYY-MM-DD") para o intervalo da planilha
-        dateStart = new Date(dateOrStartOffset + 'T00:00:00').toISOString();
-        const endD = new Date(endOffset + 'T23:59:59');
+        const startStr = dateOrStartOffset.length === 7 ? `${dateOrStartOffset}-01` : dateOrStartOffset;
+        const endStr = (endOffset && endOffset.length === 7) ? getEndOfMonthDateString(endOffset) : (endOffset || startStr);
+        dateStart = new Date(startStr + 'T00:00:00').toISOString();
+        const endD = new Date(endStr + 'T23:59:59');
         dateEnd = endD.toISOString();
       } else if (dateOrStartOffset instanceof Date) {
         const centerDate = dateOrStartOffset;
@@ -655,11 +667,39 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
     });
   }, [todasTarefas, selectedClasseServicoIds, selectedCompanyIds, selectedDocumentIds, minValor, maxValor]);
 
-  // --- HOOKS DA PLANILHA OPERACIONAL ---
   const planilhaColumns = useMemo(() => {
+    if (planilhaFocusedMonth) {
+      const { month, year } = planilhaFocusedMonth;
+      const totalDays = new Date(year, month + 1, 0).getDate();
+      const weekRanges = [
+        { startDay: 1, endDay: 7, label: 'Semana 1' },
+        { startDay: 8, endDay: 14, label: 'Semana 2' },
+        { startDay: 15, endDay: 21, label: 'Semana 3' },
+        { startDay: 22, endDay: 28, label: 'Semana 4' },
+      ];
+      if (totalDays > 28) {
+        weekRanges.push({ startDay: 29, endDay: totalDays, label: 'Semana 5' });
+      }
+      return weekRanges.map((range, index) => {
+        const startDayStr = String(range.startDay).padStart(2, '0');
+        const endDayStr = String(range.endDay).padStart(2, '0');
+        const monthStr = String(month + 1).padStart(2, '0');
+        return {
+          label: `${range.label} (${startDayStr}/${monthStr} a ${endDayStr}/${monthStr})`,
+          month,
+          year,
+          startDay: range.startDay,
+          endDay: range.endDay,
+          key: `week-${index}`
+        };
+      });
+    }
+
     const columns = [];
-    const start = new Date(planilhaDataInicio + 'T00:00:00');
-    const end = new Date(planilhaDataFim + 'T00:00:00');
+    const startStr = planilhaDataInicio.length === 7 ? `${planilhaDataInicio}-01` : planilhaDataInicio;
+    const endStr = planilhaDataFim.length === 7 ? getEndOfMonthDateString(planilhaDataFim) : planilhaDataFim;
+    const start = new Date(startStr + 'T00:00:00');
+    const end = new Date(endStr + 'T00:00:00');
     
     if (isNaN(start.getTime()) || isNaN(end.getTime())) return [];
     
@@ -682,14 +722,21 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
       current.setMonth(current.getMonth() + 1);
     }
     return columns;
-  }, [planilhaDataInicio, planilhaDataFim]);
+  }, [planilhaDataInicio, planilhaDataFim, planilhaFocusedMonth]);
 
   const planilhaTasks = useMemo(() => {
     return tasksFiltered.filter(t => {
       if (!t.data_vencimento) return false;
       const d = new Date(t.data_vencimento);
-      const start = new Date(planilhaDataInicio + 'T00:00:00');
-      const end = new Date(planilhaDataFim + 'T00:00:00');
+      
+      if (planilhaFocusedMonth) {
+        return d.getMonth() === planilhaFocusedMonth.month && d.getFullYear() === planilhaFocusedMonth.year;
+      }
+      
+      const startStr = planilhaDataInicio.length === 7 ? `${planilhaDataInicio}-01` : planilhaDataInicio;
+      const endStr = planilhaDataFim.length === 7 ? getEndOfMonthDateString(planilhaDataFim) : planilhaDataFim;
+      const start = new Date(startStr + 'T00:00:00');
+      const end = new Date(endStr + 'T00:00:00');
       
       const startMs = new Date(start.getFullYear(), start.getMonth(), 1).getTime();
       const endMs = new Date(end.getFullYear(), end.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
@@ -697,16 +744,30 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
       const tMs = d.getTime();
       return tMs >= startMs && tMs <= endMs;
     });
-  }, [tasksFiltered, planilhaDataInicio, planilhaDataFim]);
+  }, [tasksFiltered, planilhaDataInicio, planilhaDataFim, planilhaFocusedMonth]);
 
   const planilhaCompanyRows = useMemo(() => {
     const companyTasksMap = {};
     
     planilhaTasks.forEach(t => {
       const taskDate = new Date(t.data_vencimento);
-      const taskMonth = taskDate.getMonth();
-      const taskYear = taskDate.getFullYear();
-      const key = `${taskYear}-${taskMonth}`;
+      let key = "";
+      
+      if (planilhaFocusedMonth) {
+        const day = taskDate.getDate();
+        let weekIndex = 0;
+        if (day >= 1 && day <= 7) weekIndex = 0;
+        else if (day >= 8 && day <= 14) weekIndex = 1;
+        else if (day >= 15 && day <= 21) weekIndex = 2;
+        else if (day >= 22 && day <= 28) weekIndex = 3;
+        else weekIndex = 4;
+        
+        key = `week-${weekIndex}`;
+      } else {
+        const taskMonth = taskDate.getMonth();
+        const taskYear = taskDate.getFullYear();
+        key = `${taskYear}-${taskMonth}`;
+      }
       
       const hasCol = planilhaColumns.some(col => col.key === key);
       if (hasCol) {
@@ -748,17 +809,19 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
     });
     
     return rows;
-  }, [planilhaTasks, planilhaColumns, empresas]);
+  }, [planilhaTasks, planilhaColumns, empresas, planilhaFocusedMonth]);
 
   // --- HANDLERS DA PLANILHA OPERACIONAL ---
   const handlePlanilhaDataInicioChange = (val) => {
-    setPlanilhaDataInicio(val);
-    localStorage.setItem('planilha_data_inicio', val);
+    const monthVal = val ? val.substring(0, 7) : '';
+    setPlanilhaDataInicio(monthVal);
+    localStorage.setItem('planilha_data_inicio', monthVal);
   };
 
   const handlePlanilhaDataFimChange = (val) => {
-    setPlanilhaDataFim(val);
-    localStorage.setItem('planilha_data_fim', val);
+    const monthVal = val ? val.substring(0, 7) : '';
+    setPlanilhaDataFim(monthVal);
+    localStorage.setItem('planilha_data_fim', monthVal);
   };
 
 
@@ -773,10 +836,12 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
 
   const handleResetPlanilhaDates = () => {
     const defaults = getPlanilhaDefaultDates();
-    setPlanilhaDataInicio(defaults.start);
-    setPlanilhaDataFim(defaults.end);
-    localStorage.setItem('planilha_data_inicio', defaults.start);
-    localStorage.setItem('planilha_data_fim', defaults.end);
+    const startStr = defaults.start.substring(0, 7);
+    const endStr = defaults.end.substring(0, 7);
+    setPlanilhaDataInicio(startStr);
+    setPlanilhaDataFim(endStr);
+    localStorage.setItem('planilha_data_inicio', startStr);
+    localStorage.setItem('planilha_data_fim', endStr);
   };
 
   const handlePlanilhaCellMouseEnter = (task, event) => {
@@ -1002,11 +1067,43 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
         {/* Barra superior de título */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.75rem' }}>
           <div>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--text-main)' }}>Planilha Operacional</h3>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Visão panorâmica e compacta das condicionantes e seus valores.</p>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              Planilha Operacional
+              {planilhaFocusedMonth && (
+                <span style={{ fontSize: '0.9rem', fontWeight: '500', color: 'var(--primary)', background: 'rgba(37, 99, 235, 0.08)', padding: '2px 8px', borderRadius: '4px' }}>
+                  &gt; Semanal ({planilhaFocusedMonth.label.toUpperCase()})
+                </span>
+              )}
+            </h3>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+              {planilhaFocusedMonth 
+                ? "Visualização semanal das condicionantes e seus respectivos valores para o mês focado." 
+                : "Visão panorâmica e compacta das condicionantes e seus valores."}
+            </p>
           </div>
           
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            {planilhaFocusedMonth && (
+              <button 
+                onClick={() => setPlanilhaFocusedMonth(null)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  padding: '0.4rem 0.8rem',
+                  borderRadius: '8px',
+                  fontSize: '0.75rem',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  background: 'rgba(0, 0, 0, 0.05)',
+                  color: 'var(--text-main)',
+                  border: '1px solid rgba(0, 0, 0, 0.1)',
+                  transition: 'all 0.2s',
+                }}
+              >
+                Voltar para Mensal
+              </button>
+            )}
             <button 
               onClick={() => {
                 if (!planilhaRef.current) return;
@@ -1075,21 +1172,21 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
               <div style={styles.filterGroup}>
                 <label style={styles.filterLabel}>De:</label>
                 <input 
-                  type="date" 
-                  value={planilhaDataInicio} 
+                  type="month" 
+                  value={planilhaDataInicio ? planilhaDataInicio.substring(0, 7) : ''} 
                   onChange={e => handlePlanilhaDataInicioChange(e.target.value)} 
                   className="glass-input"
-                  style={{ ...styles.listSelect, width: '130px', padding: '4px 8px', fontSize: '0.75rem' }}
+                  style={{ ...styles.listSelect, width: '140px', padding: '4px 8px', fontSize: '0.75rem' }}
                 />
               </div>
               <div style={styles.filterGroup}>
                 <label style={styles.filterLabel}>Até:</label>
                 <input 
-                  type="date" 
-                  value={planilhaDataFim} 
+                  type="month" 
+                  value={planilhaDataFim ? planilhaDataFim.substring(0, 7) : ''} 
                   onChange={e => handlePlanilhaDataFimChange(e.target.value)} 
                   className="glass-input"
-                  style={{ ...styles.listSelect, width: '130px', padding: '4px 8px', fontSize: '0.75rem' }}
+                  style={{ ...styles.listSelect, width: '140px', padding: '4px 8px', fontSize: '0.75rem' }}
                 />
               </div>
               
@@ -1193,7 +1290,31 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                   <th rowSpan={2} style={{ ...styles.planilhaTh, width: '35px' }}>Nº</th>
                   <th rowSpan={2} style={{ ...styles.planilhaTh, width: '180px' }}>Nome do Cliente</th>
                   {planilhaColumns.map(col => (
-                    <th key={col.key} colSpan={2} style={styles.planilhaTh}>
+                    <th 
+                      key={col.key} 
+                      colSpan={2} 
+                      style={{ 
+                        ...styles.planilhaTh, 
+                        cursor: planilhaFocusedMonth ? 'default' : 'pointer',
+                        transition: 'background 0.2s',
+                      }}
+                      onDoubleClick={() => {
+                        if (!planilhaFocusedMonth) {
+                          setPlanilhaFocusedMonth({
+                            month: col.month,
+                            year: col.year,
+                            label: col.label
+                          });
+                        }
+                      }}
+                      title={planilhaFocusedMonth ? "" : "Clique duplo para detalhar semanas deste mês"}
+                      onMouseEnter={(e) => {
+                        if (!planilhaFocusedMonth) e.currentTarget.style.background = 'rgba(37, 99, 235, 0.12)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'rgba(240, 244, 248, 0.85)';
+                      }}
+                    >
                       {col.label.toUpperCase()}
                     </th>
                   ))}
