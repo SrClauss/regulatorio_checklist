@@ -875,16 +875,16 @@ export default function Dashboard({ user, onNavigateTab }) {
             
             <div style={{
               display: 'grid',
-              gridTemplateColumns: '1fr 1.2fr',
+              gridTemplateColumns: '2fr 1fr',
               gap: '3rem',
-              padding: '0.5rem 1.5rem',
+              padding: '0.5rem 2rem',
               flex: 1,
               minHeight: 0,
               alignItems: 'center'
             }}>
               {topCondicionantesPieData.total > 0 ? (
                 <>
-                  {/* Coluna do Gráfico */}
+                  {/* Coluna do Gráfico (2/3) */}
                   <div style={{ 
                     display: 'flex', 
                     alignItems: 'center', 
@@ -893,8 +893,8 @@ export default function Dashboard({ user, onNavigateTab }) {
                   }}>
                     <div style={{ 
                       position: 'relative', 
-                      width: '260px', 
-                      height: '260px', 
+                      width: '280px', 
+                      height: '280px', 
                       display: 'flex', 
                       alignItems: 'center', 
                       justifyContent: 'center', 
@@ -926,7 +926,7 @@ export default function Dashboard({ user, onNavigateTab }) {
                         justifyContent: 'center',
                         pointerEvents: 'none'
                       }}>
-                        <span style={{ fontSize: '2.4rem', fontWeight: '800', color: 'var(--text-main)', lineHeight: 1 }}>
+                        <span style={{ fontSize: '2.6rem', fontWeight: '800', color: 'var(--text-main)', lineHeight: 1 }}>
                           {topCondicionantesPieData.total}
                         </span>
                         <span style={{ fontSize: '0.75rem', color: 'var(--text-light)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: '4px' }}>
@@ -936,11 +936,11 @@ export default function Dashboard({ user, onNavigateTab }) {
                     </div>
                   </div>
 
-                  {/* Coluna da Legenda */}
+                  {/* Coluna da Legenda (1/3) */}
                   <div style={{
                     display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
-                    gap: '0.75rem',
+                    gridTemplateColumns: '1fr',
+                    gap: '0.45rem',
                     minWidth: 0,
                     alignContent: 'center'
                   }}>
@@ -951,17 +951,17 @@ export default function Dashboard({ user, onNavigateTab }) {
                         justifyContent: 'space-between',
                         gap: '0.75rem',
                         fontSize: '0.85rem',
-                        padding: '0.6rem 0.8rem',
+                        padding: '0.45rem 0.65rem',
                         background: 'rgba(255, 255, 255, 0.02)',
-                        borderRadius: '8px',
+                        borderRadius: '6px',
                         border: '1px solid rgba(255, 255, 255, 0.05)',
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.02)',
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.01)',
                         minWidth: 0
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', minWidth: 0, flex: 1 }}>
                           <div style={{
-                            width: '10px',
-                            height: '10px',
+                            width: '8px',
+                            height: '8px',
                             borderRadius: '50%',
                             backgroundColor: pieColors[idx % pieColors.length],
                             flexShrink: 0
