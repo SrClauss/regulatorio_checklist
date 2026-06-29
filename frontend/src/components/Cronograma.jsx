@@ -18,9 +18,7 @@ import {
   SlidersHorizontal,
   TrendingUp,
   ChevronDown,
-  Info,
-  ZoomIn,
-  ZoomOut
+  Info
 } from 'lucide-react';
 
 export default function Cronograma({ user, onViewTask, onViewDocument, onNavigateTab }) {
@@ -633,41 +631,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
     localStorage.setItem('planilha_data_fim', val);
   };
 
-  const handleZoomOut = () => {
-    const start = new Date(planilhaDataInicio + 'T00:00:00');
-    const end = new Date(planilhaDataFim + 'T00:00:00');
-    
-    // Zoom out: expande 1 mês para o início e 1 mês para o fim
-    start.setMonth(start.getMonth() - 1);
-    end.setMonth(end.getMonth() + 1);
-    
-    const startStr = start.toISOString().split('T')[0];
-    const endStr = end.toISOString().split('T')[0];
-    
-    setPlanilhaDataInicio(startStr);
-    setPlanilhaDataFim(endStr);
-    localStorage.setItem('planilha_data_inicio', startStr);
-    localStorage.setItem('planilha_data_fim', endStr);
-  };
 
-  const handleZoomIn = () => {
-    const start = new Date(planilhaDataInicio + 'T00:00:00');
-    const end = new Date(planilhaDataFim + 'T00:00:00');
-    
-    // Zoom in: contrai 1 mês de cada lado
-    start.setMonth(start.getMonth() + 1);
-    end.setMonth(end.getMonth() - 1);
-    
-    if (start <= end) {
-      const startStr = start.toISOString().split('T')[0];
-      const endStr = end.toISOString().split('T')[0];
-      
-      setPlanilhaDataInicio(startStr);
-      setPlanilhaDataFim(endStr);
-      localStorage.setItem('planilha_data_inicio', startStr);
-      localStorage.setItem('planilha_data_fim', endStr);
-    }
-  };
 
   const handleResetPlanilhaDates = () => {
     const defaults = getPlanilhaDefaultDates();
@@ -943,25 +907,11 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
               
               <div style={{ display: 'flex', gap: '4px' }}>
                 <button 
-                  onClick={handleZoomOut} 
-                  style={styles.actionPlanilhaBtn} 
-                  title="Zoom Out (Expandir Meses)"
-                >
-                  <ZoomOut size={14} />
-                </button>
-                <button 
-                  onClick={handleZoomIn} 
-                  style={styles.actionPlanilhaBtn} 
-                  title="Zoom In (Contrair Meses)"
-                >
-                  <ZoomIn size={14} />
-                </button>
-                <button 
                   onClick={handleResetPlanilhaDates} 
                   style={{ ...styles.actionPlanilhaBtn, fontSize: '0.7rem', padding: '4px 8px', fontWeight: 'bold' }} 
                   title="Restaurar período padrão de 4 meses"
                 >
-                  Padrão
+                  Período Padrão (4 Meses)
                 </button>
               </div>
             </div>
