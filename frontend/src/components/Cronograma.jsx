@@ -177,6 +177,16 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   // Estado e timers de hover para o tooltip rico
   const [hoveredTaskForTooltip, setHoveredTaskForTooltip] = useState(null);
   const planilhaHoverTimerRef = useRef(null);
+  const planilhaRef = useRef(null);
+  const [planilhaZoomLevel, setPlanilhaZoomLevel] = useState(1.0);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setPlanilhaFullScreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
   
   const [todasTarefas, setTodasTarefas] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -754,39 +764,11 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
 
 
   const handleZoomOut = () => {
-    const start = new Date(planilhaDataInicio + 'T00:00:00');
-    const end = new Date(planilhaDataFim + 'T00:00:00');
-    
-    // Zoom out: expande 1 mês para o início e 1 mês para o fim
-    start.setMonth(start.getMonth() - 1);
-    end.setMonth(end.getMonth() + 1);
-    
-    const startStr = start.toISOString().split('T')[0];
-    const endStr = end.toISOString().split('T')[0];
-    
-    setPlanilhaDataInicio(startStr);
-    setPlanilhaDataFim(endStr);
-    localStorage.setItem('planilha_data_inicio', startStr);
-    localStorage.setItem('planilha_data_fim', endStr);
+    setPlanilhaZoomLevel(prev => Math.max(prev - 0.1, 0.7));
   };
 
   const handleZoomIn = () => {
-    const start = new Date(planilhaDataInicio + 'T00:00:00');
-    const end = new Date(planilhaDataFim + 'T00:00:00');
-    
-    // Zoom in: contrai 1 mês de cada lado
-    start.setMonth(start.getMonth() + 1);
-    end.setMonth(end.getMonth() - 1);
-    
-    if (start <= end) {
-      const startStr = start.toISOString().split('T')[0];
-      const endStr = end.toISOString().split('T')[0];
-      
-      setPlanilhaDataInicio(startStr);
-      setPlanilhaDataFim(endStr);
-      localStorage.setItem('planilha_data_inicio', startStr);
-      localStorage.setItem('planilha_data_fim', endStr);
-    }
+    setPlanilhaZoomLevel(prev => Math.min(prev + 0.1, 1.4));
   };
 
   const handleResetPlanilhaDates = () => {
@@ -992,18 +974,14 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
     let globalRowIndex = 0;
     
     const fullScreenStyle = planilhaFullScreen ? {
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      width: '100vw',
-      height: '100vh',
-      zIndex: 9990,
-      background: 'var(--bg-main, #f8fafc)',
+      width: '100%',
+      height: '100%',
+      background: 'var(--bg-gradient)',
       padding: '1.5rem',
       display: 'flex',
       flexDirection: 'column',
       overflow: 'hidden',
-      borderRadius: 0,
+      borderRadius: '0px',
       border: 'none',
     } : {
       ...styles.planilhaContainer,
@@ -1011,11 +989,16 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
       minHeight: isMobile ? 'none' : 0,
       display: 'flex',
       flexDirection: 'column',
-      overflow: isMobile ? 'visible' : 'hidden'
+      overflow: isMobile ? 'visible' : 'hidden',
+      borderRadius: '0px',
     };
 
     return (
-      <div className="glass-panel animate-fade-in" style={fullScreenStyle}>
+      <div 
+        ref={planilhaRef} 
+        className="glass-panel animate-fade-in" 
+        style={fullScreenStyle}
+      >
         {/* Barra superior de título */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.75rem' }}>
           <div>
@@ -1025,7 +1008,18 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
           
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
             <button 
-              onClick={() => setPlanilhaFullScreen(!planilhaFullScreen)} 
+              onClick={() => {
+                if (!planilhaRef.current) return;
+                if (!document.fullscreenElement) {
+                  planilhaRef.current.requestFullscreen().catch(err => {
+                    console.error("Erro ao entrar em tela cheia:", err);
+                  });
+                } else {
+                  document.exitFullscreen().catch(err => {
+                    console.error("Erro ao sair de tela cheia:", err);
+                  });
+                }
+              }} 
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -1071,7 +1065,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
           gap: '0.75rem',
           padding: '0.75rem',
           background: 'rgba(255, 255, 255, 0.35)',
-          borderRadius: '12px',
+          borderRadius: '0px',
           border: '1px solid var(--glass-border)',
           marginBottom: '1rem',
         }}>
@@ -1193,7 +1187,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
               Período selecionado inválido. Selecione datas corretas.
             </div>
           ) : (
-            <table style={styles.planilhaTable}>
+            <table style={{ ...styles.planilhaTable, zoom: planilhaZoomLevel }}>
               <thead>
                 <tr>
                   <th rowSpan={2} style={{ ...styles.planilhaTh, width: '35px' }}>Nº</th>
@@ -4083,7 +4077,7 @@ const styles = {
   planilhaTableWrapper: {
     overflowX: 'auto',
     overflowY: 'auto',
-    borderRadius: '12px',
+    borderRadius: '0px',
     border: '1px solid var(--glass-border)',
     background: 'rgba(255, 255, 255, 0.25)',
     boxShadow: 'var(--shadow-sm)',
