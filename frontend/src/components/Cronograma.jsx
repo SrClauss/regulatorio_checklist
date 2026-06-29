@@ -154,7 +154,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   const getPlanilhaDefaultDates = () => {
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth(), 1);
-    const end = new Date(now.getFullYear(), now.getMonth() + 4, 0); // último dia do mês atual + 3
+    const end = new Date(now.getFullYear(), now.getMonth() + 5, 0); // último dia do mês atual + 4
     return {
       start: start.toISOString().split('T')[0],
       end: end.toISOString().split('T')[0]
@@ -169,15 +169,28 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
     return `${yearMonthStr}-${String(lastDay).padStart(2, '0')}`;
   };
 
-  // Estados do intervalo de data da Planilha Operacional (no formato YYYY-MM)
-  const [planilhaDataInicio, setPlanilhaDataInicio] = useState(() => {
-    const val = localStorage.getItem('planilha_data_inicio') || getPlanilhaDefaultDates().start;
-    return val.substring(0, 7);
-  });
-  const [planilhaDataFim, setPlanilhaDataFim] = useState(() => {
-    const val = localStorage.getItem('planilha_data_fim') || getPlanilhaDefaultDates().end;
-    return val.substring(0, 7);
-  });
+  const getInitialDates = () => {
+    const now = new Date();
+    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const savedMonthKey = localStorage.getItem('cronograma_saved_month');
+    
+    if (savedMonthKey !== currentMonthKey) {
+      localStorage.removeItem('planilha_data_inicio');
+      localStorage.removeItem('planilha_data_fim');
+      localStorage.setItem('cronograma_saved_month', currentMonthKey);
+    }
+    
+    const defaults = getPlanilhaDefaultDates();
+    const startVal = (localStorage.getItem('planilha_data_inicio') || defaults.start).substring(0, 7);
+    const endVal = (localStorage.getItem('planilha_data_fim') || defaults.end).substring(0, 7);
+    return { startVal, endVal };
+  };
+
+  const initialDates = getInitialDates();
+
+  // Estados do intervalo de data compartilhado (no formato YYYY-MM)
+  const [planilhaDataInicio, setPlanilhaDataInicio] = useState(initialDates.startVal);
+  const [planilhaDataFim, setPlanilhaDataFim] = useState(initialDates.endVal);
 
   // Novos filtros solicitados pelo usuário
   const [selectedDocumentIds, setSelectedDocumentIds] = useState([]);
@@ -226,17 +239,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   const [selectedCompanyIds, setSelectedCompanyIds] = useState([]);
   const [zoomedMonth, setZoomedMonth] = useState(null); // null ou { month: number, year: number, label: string, key: string }
 
-  // Estado de Busca e Filtro da Aba Lista Analítica (Filtro Inteligente)
-  const [searchTerm, setSearchTerm] = useState('');
-  const [listCompanyFilter, setListCompanyFilter] = useState('');
-  const [listStatusFilter, setListStatusFilter] = useState('');
-  const [listCurrentPage, setListCurrentPage] = useState(1);
-  const [gridYear, setGridYear] = useState(2026);
-  const [gridStartMonth, setGridStartMonth] = useState(6); // Default: Julho (index 6)
 
-  useEffect(() => {
-    setListCurrentPage(1);
-  }, [searchTerm, listCompanyFilter, listStatusFilter, gridYear, gridStartMonth]);
 
   // Estados de Hover
   const [hoveredTaskId, setHoveredTaskId] = useState(null);
@@ -405,69 +408,21 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
 
   useEffect(() => {
     if (!loading) {
-      if (activeTab === 'planilha') {
-        fetchTasks(planilhaDataInicio, planilhaDataFim);
-      } else if (activeTab === 'lista') {
-        const now = new Date();
-        const startOfGrid = new Date(gridYear, gridStartMonth, 1);
-        const endOfGrid = new Date(gridYear, gridStartMonth + 6, 0);
-        
-        // Calcular a quantidade de meses de distância a partir do mês atual
-        const monthsDiffStart = (now.getFullYear() - startOfGrid.getFullYear()) * 12 + (now.getMonth() - startOfGrid.getMonth());
-        const monthsDiffEnd = (endOfGrid.getFullYear() - now.getFullYear()) * 12 + (endOfGrid.getMonth() - now.getMonth());
-        
-        const start = Math.max(monthsDiffStart, 1);
-        const end = Math.max(monthsDiffEnd, 6);
-        fetchTasks(start, end);
-      } else {
-        fetchTasks(centerMonthDate);
-      }
+      fetchTasks(planilhaDataInicio, planilhaDataFim);
     }
-  }, [centerMonthDate, activeTab, gridYear, gridStartMonth, planilhaDataInicio, planilhaDataFim, loading]);
+  }, [activeTab, planilhaDataInicio, planilhaDataFim, loading]);
 
   const handleScroll = (e) => {
     const container = e.currentTarget;
     if (!container) return;
     setTimelineScrollTop(container.scrollTop);
-
-    if (loadingTasks || zoomedMonth) return;
-    const { scrollTop, clientHeight, scrollHeight } = container;
-
-    // Use boundary-based detection instead of center-index to prevent unstable shifting
-    const TRIGGER_THRESHOLD = 30; // px near top/bottom to shift
-
-    if (scrollTop < TRIGGER_THRESHOLD && !shouldCompensateScrollRef.current) {
-      lastScrollTopRef.current = scrollTop;
-      shiftDirectionRef.current = 'up';
-      shouldCompensateScrollRef.current = true;
-      setCenterMonthDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
-    } else if (scrollTop + clientHeight > scrollHeight - TRIGGER_THRESHOLD && !shouldCompensateScrollRef.current) {
-      lastScrollTopRef.current = scrollTop;
-      shiftDirectionRef.current = 'down';
-      shouldCompensateScrollRef.current = true;
-      setCenterMonthDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
-    }
   };
 
   const handleWheel = (e) => {
-    // Shifting is automatically handled by the scroll event.
+    // Wheel events do not trigger shifts.
   };
 
-  useLayoutEffect(() => {
-    if (shouldCompensateScrollRef.current && containerRef.current) {
-      const container = containerRef.current;
-      const ROW_HEIGHT = 230;
-      if (shiftDirectionRef.current === 'up') {
-        container.scrollTop = lastScrollTopRef.current + ROW_HEIGHT;
-      } else if (shiftDirectionRef.current === 'down') {
-        container.scrollTop = lastScrollTopRef.current - ROW_HEIGHT;
-      }
-      shouldCompensateScrollRef.current = false;
-      shiftDirectionRef.current = null;
-    }
-  }, [centerMonthDate]);
-
-  // Centraliza o scroll no mês atual ao entrar na linha do tempo
+  // Centraliza o scroll no mês atual ao entrar na linha do tempo se houver a linha correspondente
   useEffect(() => {
     if (!loading && activeTab === 'timeline' && containerRef.current) {
       setTimeout(() => {
@@ -842,6 +797,9 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
     setPlanilhaDataFim(endStr);
     localStorage.setItem('planilha_data_inicio', startStr);
     localStorage.setItem('planilha_data_fim', endStr);
+    const now = new Date();
+    const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    localStorage.setItem('cronograma_saved_month', currentMonthKey);
   };
 
   const handlePlanilhaCellMouseEnter = (task, event) => {
@@ -1136,143 +1094,10 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
               {planilhaFullScreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
               <span>{planilhaFullScreen ? 'Sair da Tela Inteira' : 'Tela Inteira'}</span>
             </button>
-
-            {(selectedCompanyIds.length > 0 || selectedClasseServicoIds.length > 0 || selectedDocumentIds.length > 0 || minValor || maxValor) && (
-              <button 
-                style={styles.clearFilterHeaderBtn} 
-                onClick={() => {
-                  setSelectedCompanyIds([]);
-                  setSelectedClasseServicoIds([]);
-                  setSelectedDocumentIds([]);
-                  setMinValor('');
-                  setMaxValor('');
-                }}
-              >
-                <X size={12} />
-                <span>Limpar Filtros</span>
-              </button>
-            )}
           </div>
         </div>
 
-        {/* Barra de Filtros Inteligentes (Cliente - Serviço - Documento - Datas - Valores) */}
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '0.75rem',
-          padding: '0.75rem',
-          background: 'rgba(255, 255, 255, 0.35)',
-          borderRadius: '0px',
-          border: '1px solid var(--glass-border)',
-          marginBottom: '1rem',
-        }}>
-          {/* Linha 1: Período e Zoom */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-              <div style={styles.filterGroup}>
-                <label style={styles.filterLabel}>De:</label>
-                <input 
-                  type="month" 
-                  value={planilhaDataInicio ? planilhaDataInicio.substring(0, 7) : ''} 
-                  onChange={e => handlePlanilhaDataInicioChange(e.target.value)} 
-                  className="glass-input"
-                  style={{ ...styles.listSelect, width: '140px', padding: '4px 8px', fontSize: '0.75rem' }}
-                />
-              </div>
-              <div style={styles.filterGroup}>
-                <label style={styles.filterLabel}>Até:</label>
-                <input 
-                  type="month" 
-                  value={planilhaDataFim ? planilhaDataFim.substring(0, 7) : ''} 
-                  onChange={e => handlePlanilhaDataFimChange(e.target.value)} 
-                  className="glass-input"
-                  style={{ ...styles.listSelect, width: '140px', padding: '4px 8px', fontSize: '0.75rem' }}
-                />
-              </div>
-              
-              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                <button 
-                  onClick={handleResetPlanilhaDates} 
-                  style={{ ...styles.actionPlanilhaBtn, fontSize: '0.7rem', padding: '4px 8px', fontWeight: 'bold' }} 
-                  title="Restaurar período padrão de 4 meses"
-                >
-                  Padrão (4M)
-                </button>
-                {planilhaFullScreen && (
-                  <>
-                    <button 
-                      onClick={handleZoomOut} 
-                      style={styles.actionPlanilhaBtn} 
-                      title="Zoom Out (Expandir Meses)"
-                    >
-                      <ZoomOut size={14} />
-                    </button>
-                    <button 
-                      onClick={handleZoomIn} 
-                      style={styles.actionPlanilhaBtn} 
-                      title="Zoom In (Contrair Meses)"
-                    >
-                      <ZoomIn size={14} />
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
 
-            {/* Filtros de Valores */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-              <div style={styles.filterGroup}>
-                <label style={styles.filterLabel}>R$ Mín:</label>
-                <input 
-                  type="number" 
-                  placeholder="Mín"
-                  value={minValor} 
-                  onChange={e => setMinValor(e.target.value)} 
-                  className="glass-input"
-                  style={{ ...styles.listSelect, width: '95px', padding: '4px 8px', fontSize: '0.75rem' }}
-                />
-              </div>
-              <div style={styles.filterGroup}>
-                <label style={styles.filterLabel}>R$ Máx:</label>
-                <input 
-                  type="number" 
-                  placeholder="Máx"
-                  value={maxValor} 
-                  onChange={e => setMaxValor(e.target.value)} 
-                  className="glass-input"
-                  style={{ ...styles.listSelect, width: '95px', padding: '4px 8px', fontSize: '0.75rem' }}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Linha 2: Entidades (Cliente, Serviço, Documento) */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-            <MultiSelectDropdown 
-              label="Cliente:"
-              options={empresas.map(e => ({ value: e._id, label: e.nome_fantasia }))}
-              selectedValues={selectedCompanyIds}
-              onChange={setSelectedCompanyIds}
-              placeholder="Todos os Clientes"
-            />
-
-            <MultiSelectDropdown 
-              label="Serviço:"
-              options={classeServicos.map(cs => ({ value: cs._id, label: cs.nome }))}
-              selectedValues={selectedClasseServicoIds}
-              onChange={setSelectedClasseServicoIds}
-              placeholder="Todos os Serviços"
-            />
-
-            <MultiSelectDropdown 
-              label="Documento:"
-              options={documentos.map(d => ({ value: d._id, label: `${d.tipo} ${d.numero ? `(${d.numero})` : ''}` }))}
-              selectedValues={selectedDocumentIds}
-              onChange={setSelectedDocumentIds}
-              placeholder="Todos os Documentos"
-            />
-          </div>
-        </div>
 
         {/* Tabela de Dados */}
         <div style={{
@@ -1444,17 +1269,28 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
     const currentYear = now.getFullYear();
 
     const allMonths = [];
-    const startDate = new Date(centerMonthDate.getFullYear(), centerMonthDate.getMonth() - 1, 1);
-    for (let i = 0; i < 3; i++) {
-      const d = new Date(startDate.getFullYear(), startDate.getMonth() + i, 1);
-      const monthStr = d.toLocaleDateString('pt-BR', { month: 'long' });
-      const capMonth = monthStr.charAt(0).toUpperCase() + monthStr.slice(1);
-      allMonths.push({
-        label: `${capMonth} de ${d.getFullYear()}`,
-        month: d.getMonth(),
-        year: d.getFullYear(),
-        key: `${d.getFullYear()}-${d.getMonth()}`
-      });
+    const startStr = planilhaDataInicio.length === 7 ? `${planilhaDataInicio}-01` : planilhaDataInicio;
+    const endStr = planilhaDataFim.length === 7 ? getEndOfMonthDateString(planilhaDataFim) : planilhaDataFim;
+    const start = new Date(startStr + 'T00:00:00');
+    const end = new Date(endStr + 'T00:00:00');
+    
+    if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+      const current = new Date(start.getFullYear(), start.getMonth(), 1);
+      const limit = new Date(end.getFullYear(), end.getMonth(), 1);
+      
+      let iterations = 0;
+      while (current <= limit && iterations < 36) {
+        iterations++;
+        const monthStr = current.toLocaleDateString('pt-BR', { month: 'long' });
+        const capMonth = monthStr.charAt(0).toUpperCase() + monthStr.slice(1);
+        allMonths.push({
+          label: `${capMonth} de ${current.getFullYear()}`,
+          month: current.getMonth(),
+          year: current.getFullYear(),
+          key: `${current.getFullYear()}-${current.getMonth()}`
+        });
+        current.setMonth(current.getMonth() + 1);
+      }
     }
 
     const months = zoomedMonth ? allMonths.filter(m => m.key === zoomedMonth.key) : allMonths;
@@ -1481,9 +1317,9 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
 
     return (
       <div style={wrapperStyle}>
-        <div style={styles.timelineControlBar}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-            {zoomedMonth && (
+        {zoomedMonth && (
+          <div style={styles.timelineControlBar}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                 <button 
                   onClick={() => setZoomedMonth(null)}
@@ -1505,49 +1341,9 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                   {zoomedMonth.label}
                 </span>
               </div>
-            )}
-            {/* Filtro de Empresa no Cabeçalho */}
-            {user.role !== 'cliente' && (
-              <MultiSelectDropdown 
-                label="Empresa:"
-                options={empresas.map(emp => ({ value: emp._id, label: emp.nome_fantasia }))}
-                selectedValues={selectedCompanyIds}
-                onChange={setSelectedCompanyIds}
-                placeholder="Todas as Empresas"
-              />
-            )}
-
-            {/* Filtro de Classe de Serviço no Cabeçalho */}
-            <MultiSelectDropdown 
-              label="Classe:"
-              options={classeServicos.map(cs => ({ value: cs._id, label: cs.nome }))}
-              selectedValues={selectedClasseServicoIds}
-              onChange={setSelectedClasseServicoIds}
-              placeholder="Todas as Classes"
-            />
-
-            {(selectedClasseServicoIds.length > 0 || selectedCompanyIds.length > 0) && (
-              <button 
-                style={styles.clearFilterHeaderBtn} 
-                onClick={() => {
-                  setSelectedClasseServicoIds([]);
-                  setSelectedCompanyIds([]);
-                }}
-              >
-                <X size={12} />
-                <span>Limpar Filtros</span>
-              </button>
-            )}
-          </div>
-
-          {!isMobile && (
-            <div style={styles.horizontalNavBtns}>
-              <button style={styles.todayBtn} onClick={handleResetCenter}>Hoje</button>
-              <button style={styles.navCircleBtn} onClick={handleScrollLeft}><ChevronLeft size={18} /></button>
-              <button style={styles.navCircleBtn} onClick={handleScrollRight}><ChevronRight size={18} /></button>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {isMobile ? (
           renderVerticalTimeline(months, tasksToRender)
@@ -2239,12 +2035,11 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
 
 
 
-  // ==========================================
-  // VIEW 5: LISTA ANALÍTICA (CHECKLIST GRID)
-  // ==========================================
   const renderListaView = () => {
-    // 1. Calcular as 6 colunas mensais com base no mês e ano selecionados
-    const columns = [];
+    return null;
+  };
+
+  const _renderListaViewUnused = () => {
     const monthNamesPt = [
       'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
       'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
@@ -2820,12 +2615,6 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
         >
           <Activity size={18} /> Linha do Tempo Stacked
         </button>
-        <button 
-          style={activeTab === 'lista' ? styles.activeTab : styles.tab} 
-          onClick={() => setActiveTab('lista')}
-        >
-          <SlidersHorizontal size={18} /> Filtro Inteligente
-        </button>
       </div>
 
       {/* Legenda de Status */}
@@ -2849,6 +2638,144 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
         </div>
       </div>
 
+      {/* Barra de Filtros Globais Compartilhados */}
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '0.75rem',
+        padding: '0.75rem',
+        background: 'rgba(255, 255, 255, 0.35)',
+        borderRadius: '0px',
+        border: '1px solid var(--glass-border)',
+        marginBottom: '0.5rem',
+      }}>
+        {/* Linha 1: Período e Zoom */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <div style={styles.filterGroup}>
+              <label style={styles.filterLabel}>De:</label>
+              <input 
+                type="month" 
+                value={planilhaDataInicio ? planilhaDataInicio.substring(0, 7) : ''} 
+                onChange={e => handlePlanilhaDataInicioChange(e.target.value)} 
+                className="glass-input"
+                style={{ ...styles.listSelect, width: '140px', padding: '4px 8px', fontSize: '0.75rem' }}
+              />
+            </div>
+            <div style={styles.filterGroup}>
+              <label style={styles.filterLabel}>Até:</label>
+              <input 
+                type="month" 
+                value={planilhaDataFim ? planilhaDataFim.substring(0, 7) : ''} 
+                onChange={e => handlePlanilhaDataFimChange(e.target.value)} 
+                className="glass-input"
+                style={{ ...styles.listSelect, width: '140px', padding: '4px 8px', fontSize: '0.75rem' }}
+              />
+            </div>
+            
+            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+              <button 
+                onClick={handleResetPlanilhaDates} 
+                style={{ ...styles.actionPlanilhaBtn, fontSize: '0.7rem', padding: '4px 8px', fontWeight: 'bold' }} 
+                title="Restaurar período padrão de 4 meses"
+              >
+                Padrão (4M)
+              </button>
+              {activeTab === 'planilha' && (
+                <>
+                  <div style={{ width: '1px', height: '18px', background: 'rgba(0, 0, 0, 0.1)', margin: '0 4px' }}></div>
+                  <button 
+                    onClick={handleZoomOut} 
+                    style={styles.actionPlanilhaBtn} 
+                    title="Zoom Out (Expandir Meses)"
+                  >
+                    <ZoomOut size={14} />
+                  </button>
+                  <button 
+                    onClick={handleZoomIn} 
+                    style={styles.actionPlanilhaBtn} 
+                    title="Zoom In (Contrair Meses)"
+                  >
+                    <ZoomIn size={14} />
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Filtros de Valores */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <div style={styles.filterGroup}>
+              <label style={styles.filterLabel}>R$ Mín:</label>
+              <input 
+                type="number" 
+                placeholder="Mín"
+                value={minValor} 
+                onChange={e => setMinValor(e.target.value)} 
+                className="glass-input"
+                style={{ ...styles.listSelect, width: '95px', padding: '4px 8px', fontSize: '0.75rem' }}
+              />
+            </div>
+            <div style={styles.filterGroup}>
+              <label style={styles.filterLabel}>R$ Máx:</label>
+              <input 
+                type="number" 
+                placeholder="Máx"
+                value={maxValor} 
+                onChange={e => setMaxValor(e.target.value)} 
+                className="glass-input"
+                style={{ ...styles.listSelect, width: '95px', padding: '4px 8px', fontSize: '0.75rem' }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Linha 2: Entidades (Cliente, Serviço, Documento) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+          {user.role !== 'cliente' && (
+            <MultiSelectDropdown 
+              label="Cliente:"
+              options={empresas.map(e => ({ value: e._id, label: e.nome_fantasia }))}
+              selectedValues={selectedCompanyIds}
+              onChange={setSelectedCompanyIds}
+              placeholder="Todos os Clientes"
+            />
+          )}
+
+          <MultiSelectDropdown 
+            label="Serviço:"
+            options={classeServicos.map(cs => ({ value: cs._id, label: cs.nome }))}
+            selectedValues={selectedClasseServicoIds}
+            onChange={setSelectedClasseServicoIds}
+            placeholder="Todos os Serviços"
+          />
+
+          <MultiSelectDropdown 
+            label="Documento:"
+            options={documentos.map(d => ({ value: d._id, label: `${d.tipo} ${d.numero ? `(${d.numero})` : ''}` }))}
+            selectedValues={selectedDocumentIds}
+            onChange={setSelectedDocumentIds}
+            placeholder="Todos os Documentos"
+          />
+
+          {(selectedCompanyIds.length > 0 || selectedClasseServicoIds.length > 0 || selectedDocumentIds.length > 0 || minValor || maxValor) && (
+            <button 
+              style={styles.clearFilterHeaderBtn} 
+              onClick={() => {
+                setSelectedCompanyIds([]);
+                setSelectedClasseServicoIds([]);
+                setSelectedDocumentIds([]);
+                setMinValor('');
+                setMaxValor('');
+              }}
+            >
+              <X size={12} />
+              <span>Limpar Filtros</span>
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Conteúdo Dinâmico conforme Tab Ativa */}
       <div style={{
         ...styles.tabContent,
@@ -2860,7 +2787,6 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
       }}>
         {activeTab === 'planilha' && renderPlanilhaView()}
         {activeTab === 'timeline' && renderTimelineView()}
-        {activeTab === 'lista' && renderListaView()}
       </div>
 
       {renderTooltip()}
