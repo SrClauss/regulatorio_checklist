@@ -867,73 +867,80 @@ export default function Dashboard({ user, onNavigateTab }) {
       {/* 2. SEÇÃO DE PRINCIPAIS CONDICIONANTES (LINHA INTEIRA) */}
       <div style={{ ...styles.dashboardBodyRow, marginTop: '1.5rem' }}>
         <div style={{ ...styles.column, flex: 1 }}>
-          <div className="glass-panel" style={{ ...styles.panel, height: '340px', justifyContent: 'flex-start' }}>
+          <div className="glass-panel" style={{ ...styles.panel, height: '360px', justifyContent: 'flex-start' }}>
             <div style={styles.panelHeader}>
               <Award size={20} color="var(--primary)" />
               <h3 style={styles.panelTitle}>Principais Condicionantes</h3>
             </div>
             
             <div style={{
-              display: 'flex',
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
+              display: 'grid',
+              gridTemplateColumns: '1fr 1.2fr',
               gap: '3rem',
               padding: '0.5rem 1.5rem',
               flex: 1,
-              minHeight: 0
+              minHeight: 0,
+              alignItems: 'center'
             }}>
               {topCondicionantesPieData.total > 0 ? (
                 <>
+                  {/* Coluna do Gráfico */}
                   <div style={{ 
-                    position: 'relative', 
-                    width: '220px', 
-                    height: '220px', 
                     display: 'flex', 
                     alignItems: 'center', 
-                    justifyContent: 'center', 
-                    flexShrink: 0 
+                    justifyContent: 'center',
+                    minWidth: 0
                   }}>
-                    <svg viewBox="0 0 100 100" style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }}>
-                      {topCondicionantesPieData.slices.map((slice, idx) => {
-                        const pathData = getSlicePath(slice.startPercent, slice.endPercent);
-                        return (
-                          <path
-                            key={idx}
-                            d={pathData}
-                            fill={pieColors[idx % pieColors.length]}
-                            style={{ 
-                              transition: 'all 0.3s ease',
-                              cursor: 'pointer'
-                            }}
-                            title={`${slice.name}: ${slice.value}`}
-                          />
-                        );
-                      })}
-                      <circle cx="50" cy="50" r="28" fill="var(--card-bg, #ffffff)" />
-                    </svg>
-                    <div style={{
-                      position: 'absolute',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      pointerEvents: 'none'
+                    <div style={{ 
+                      position: 'relative', 
+                      width: '260px', 
+                      height: '260px', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      flexShrink: 0 
                     }}>
-                      <span style={{ fontSize: '2rem', fontWeight: '800', color: 'var(--text-main)', lineHeight: 1 }}>
-                        {topCondicionantesPieData.total}
-                      </span>
-                      <span style={{ fontSize: '0.65rem', color: 'var(--text-light)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: '4px' }}>
-                        Total
-                      </span>
+                      <svg viewBox="0 0 100 100" style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }}>
+                        {topCondicionantesPieData.slices.map((slice, idx) => {
+                          const pathData = getSlicePath(slice.startPercent, slice.endPercent);
+                          return (
+                            <path
+                              key={idx}
+                              d={pathData}
+                              fill={pieColors[idx % pieColors.length]}
+                              style={{ 
+                                transition: 'all 0.3s ease',
+                                cursor: 'pointer'
+                              }}
+                              title={`${slice.name}: ${slice.value}`}
+                            />
+                          );
+                        })}
+                        <circle cx="50" cy="50" r="28" fill="var(--card-bg, #ffffff)" />
+                      </svg>
+                      <div style={{
+                        position: 'absolute',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        pointerEvents: 'none'
+                      }}>
+                        <span style={{ fontSize: '2.4rem', fontWeight: '800', color: 'var(--text-main)', lineHeight: 1 }}>
+                          {topCondicionantesPieData.total}
+                        </span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-light)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: '4px' }}>
+                          Total
+                        </span>
+                      </div>
                     </div>
                   </div>
 
+                  {/* Coluna da Legenda */}
                   <div style={{
-                    flex: 1,
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-                    gap: '1rem',
+                    gridTemplateColumns: '1fr 1fr',
+                    gap: '0.75rem',
                     minWidth: 0,
                     alignContent: 'center'
                   }}>
@@ -943,7 +950,7 @@ export default function Dashboard({ user, onNavigateTab }) {
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         gap: '0.75rem',
-                        fontSize: '0.82rem',
+                        fontSize: '0.85rem',
                         padding: '0.6rem 0.8rem',
                         background: 'rgba(255, 255, 255, 0.02)',
                         borderRadius: '8px',
@@ -970,14 +977,14 @@ export default function Dashboard({ user, onNavigateTab }) {
                           </span>
                         </div>
                         <span style={{ color: 'var(--text-muted)', fontWeight: '700', flexShrink: 0, marginLeft: '0.5rem' }}>
-                          {slice.value} <span style={{ fontSize: '0.7rem', fontWeight: '500', color: 'var(--text-light)' }}>({Math.round(slice.percent * 100)}%)</span>
+                          {slice.value} <span style={{ fontSize: '0.72rem', fontWeight: '500', color: 'var(--text-light)' }}>({Math.round(slice.percent * 100)}%)</span>
                         </span>
                       </div>
                     ))}
                   </div>
                 </>
               ) : (
-                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem', width: '100%' }}>
+                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem', width: '100%', gridColumn: 'span 2' }}>
                   Nenhuma condicionante no período
                 </div>
               )}
