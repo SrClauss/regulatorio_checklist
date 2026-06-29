@@ -1122,7 +1122,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                         cursor: planilhaFocusedMonth ? 'default' : 'pointer',
                         transition: 'background 0.2s',
                       }}
-                      onDoubleClick={() => {
+                      onClick={() => {
                         if (!planilhaFocusedMonth) {
                           setPlanilhaFocusedMonth({
                             month: col.month,
@@ -1131,7 +1131,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                           });
                         }
                       }}
-                      title={planilhaFocusedMonth ? "" : "Clique duplo para detalhar semanas deste mês"}
+                      title={planilhaFocusedMonth ? "" : "Clique para detalhar semanas deste mês"}
                       onMouseEnter={(e) => {
                         if (!planilhaFocusedMonth) e.currentTarget.style.background = 'rgba(37, 99, 235, 0.12)';
                       }}
