@@ -88,3 +88,27 @@ async def send_test_push(current_user: UsuarioDB = Depends(get_current_active_us
         "sucessos": sucessos,
         "limpezas_realizadas": len(erros_limpar)
     }
+
+@router.get("/vistos", response_model=List[str])
+async def get_alertas_vistos(current_user: UsuarioDB = Depends(get_current_active_user)):
+    """Retorna a lista de IDs de alertas que foram marcados como vistos pelo usuário."""
+    db = get_database()
+    cursor = db.alertas_vistos.find({"usuario_id": current_user.id})
+    vistos = await cursor.to_list(length=1000)
+    return [v["alerta_id"] for v in vistos]
+
+@router.post("/vistos/{alerta_id}")
+async def marcar_alerta_visto(alerta_id: str, visto: bool = True, current_user: UsuarioDB = Depends(get_current_active_user)):
+    """Marca ou desmarca um alerta como visto pelo usuário."""
+    db = get_database()
+    if visto:
+        await db.alertas_vistos.update_one(
+            {"usuario_id": current_user.id, "alerta_id": alerta_id},
+            {"$set": {"visto": True, "atualizado_em": datetime.utcnow()}},
+            upsert=True
+        )
+    else:
+        await db.alertas_vistos.delete_many(
+            {"usuario_id": current_user.id, "alerta_id": alerta_id}
+        )
+    return {"status": "ok", "alerta_id": alerta_id, "visto": visto}

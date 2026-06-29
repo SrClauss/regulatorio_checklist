@@ -405,6 +405,24 @@ export const api = {
     return response.json();
   },
 
+  async getAlertasVistos() {
+    const response = await fetch(`${API_BASE_URL}/api/notificacoes/vistos`, {
+      method: 'GET',
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error('Falha ao obter alertas vistos');
+    return response.json();
+  },
+
+  async marcarAlertaVisto(alertaId, visto) {
+    const response = await fetch(`${API_BASE_URL}/api/notificacoes/vistos/${alertaId}?visto=${visto}`, {
+      method: 'POST',
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error('Falha ao marcar alerta como visto');
+    return response.json();
+  },
+
   // Prestadores
   async listPrestadores() {
     const response = await fetch(`${API_BASE_URL}/api/prestadores`, {

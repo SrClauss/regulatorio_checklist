@@ -26,6 +26,8 @@ export default function Dashboard({ user, onNavigateTab }) {
   const [anualData, setAnualData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedPeriod, setSelectedPeriod] = useState('mensal'); // 'mensal', 'bimestral', 'trimestral'
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [alertasVistos, setAlertasVistos] = useState([]);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -39,7 +41,7 @@ export default function Dashboard({ user, onNavigateTab }) {
         const endOfRange = new Date(now.getFullYear(), now.getMonth() + 3, 0, 23, 59, 59).toISOString();
 
         // Carrega dados agregados em paralelo
-        const [prevMensal, prevAnual, csListRes, docListRes, empListRes, tarefasAtrasadas, tarefasPeriodo] = await Promise.all([
+        const [prevMensal, prevAnual, csListRes, docListRes, empListRes, tarefasAtrasadas, tarefasPeriodo, vistosRes] = await Promise.all([
           (user.role === 'admin' || user.role === 'consultor') 
             ? api.getPrevisibilidadeMensal(mes, ano) 
             : Promise.resolve({ faturamento_total: 0, faturamento_renovacoes: 0, faturamento_condicionantes: 0 }),
@@ -50,7 +52,8 @@ export default function Dashboard({ user, onNavigateTab }) {
           api.listDocumentos(),
           api.listEmpresas(),
           api.listTarefas({ status: 'Atrasado' }),
-          api.listTarefas({ data_inicio: startOfRange, data_fim: endOfRange })
+          api.listTarefas({ data_inicio: startOfRange, data_fim: endOfRange }),
+          api.getAlertasVistos()
         ]);
 
         if (user.role === 'admin' || user.role === 'consultor') {
@@ -61,6 +64,7 @@ export default function Dashboard({ user, onNavigateTab }) {
         setCsList(csListRes);
         setDocumentos(docListRes);
         setEmpresas(empListRes);
+        setAlertasVistos(vistosRes || []);
 
         // Mesclar tarefas do período e as atrasadas
         const mergedTasksMap = {};
@@ -77,6 +81,14 @@ export default function Dashboard({ user, onNavigateTab }) {
 
     fetchDashboardData();
   }, [user]);
+
+  // Fecha dropdown de notificações ao clicar fora
+  useEffect(() => {
+    if (!showNotifications) return;
+    const handleClose = () => setShowNotifications(false);
+    document.addEventListener('click', handleClose);
+    return () => document.removeEventListener('click', handleClose);
+  }, [showNotifications]);
 
   // Auxiliares de Formatação e Prazos
   const formatCurrency = (val) => {
@@ -193,7 +205,7 @@ export default function Dashboard({ user, onNavigateTab }) {
     });
   }, [activeTasks, csList]);
 
-  // Alertas Inteligentes do Período
+  // Alertas Inteligentes do Período com IDs Únicos para marcação de Vistos
   const systemAlerts = useMemo(() => {
     const alerts = [];
     const now = new Date();
@@ -201,6 +213,7 @@ export default function Dashboard({ user, onNavigateTab }) {
     // 1. Condicionantes Atrasadas (Crítico)
     if (periodMetrics.atrasadas > 0) {
       alerts.push({
+        id: `tarefas-atrasadas-${selectedPeriod}`,
         type: 'danger',
         message: `${periodMetrics.atrasadas} condicionante${periodMetrics.atrasadas > 1 ? 's estão' : ' está'} em ATRASO!`,
         details: 'Ações imediatas de regularização são necessárias para evitar penalidades.',
@@ -210,14 +223,15 @@ export default function Dashboard({ user, onNavigateTab }) {
 
     // 2. Licenças Vencidas (Crítico)
     const expiredDocs = documentos.filter(doc => doc.status === 'Vencido');
-    if (expiredDocs.length > 0) {
+    expiredDocs.forEach(doc => {
       alerts.push({
+        id: `doc-vencido-${doc._id}`,
         type: 'danger',
-        message: `${expiredDocs.length} licença${expiredDocs.length > 1 ? 's regulatórias estão vencidas' : ' regulatória está vencida'}!`,
-        details: 'Abertura imediata de processo de renovação requerida junto ao órgão.',
+        message: `Licença "${doc.tipo}" está VENCIDA!`,
+        details: `Processo: ${doc.numero_processo || 'N/A'}. Renovação urgente requerida.`,
         icon: <AlertTriangle size={18} color="var(--danger)" />
       });
-    }
+    });
 
     // 3. Licenças a Vencer em 30 dias (Crítico)
     const expiringDocs = documentos.filter(doc => {
@@ -231,6 +245,7 @@ export default function Dashboard({ user, onNavigateTab }) {
       const dVenc = new Date(doc.data_vencimento);
       const diffDays = Math.ceil((dVenc - now) / (1000 * 60 * 60 * 24));
       alerts.push({
+        id: `doc-expirando-${doc._id}`,
         type: 'danger',
         message: `Licença "${doc.tipo}" vence em ${diffDays} dias!`,
         details: `Processo: ${doc.numero_processo || 'N/A'}. Regularização pendente.`,
@@ -242,6 +257,7 @@ export default function Dashboard({ user, onNavigateTab }) {
     const revenueInRisk = activeTasks.filter(isTaskOverdue).reduce((acc, t) => acc + (t.valor_estimado || 0), 0);
     if (revenueInRisk > 0 && (user.role === 'admin' || user.role === 'consultor')) {
       alerts.push({
+        id: `receita-risco-${selectedPeriod}`,
         type: 'warning',
         message: `Faturamento em Risco: ${formatCurrency(revenueInRisk)}`,
         details: 'Receitas retidas devido ao atraso na entrega das condicionantes.',
@@ -258,6 +274,7 @@ export default function Dashboard({ user, onNavigateTab }) {
     });
     if (upcomingTasks.length > 0) {
       alerts.push({
+        id: `tarefas-vencimento-7dias-${selectedPeriod}`,
         type: 'warning',
         message: `${upcomingTasks.length} condicionante${upcomingTasks.length > 1 ? 's vencem' : ' vence'} nos próximos 7 dias.`,
         details: 'Acompanhe de perto a execução para garantir a entrega no prazo.',
@@ -268,6 +285,7 @@ export default function Dashboard({ user, onNavigateTab }) {
     // 6. Alerta de baixo compliance rate (Aviso)
     if (periodMetrics.complianceRate < 80) {
       alerts.push({
+        id: `baixo-compliance-${selectedPeriod}`,
         type: 'warning',
         message: `Taxa de conformidade do período baixa (${periodMetrics.complianceRate}%)`,
         details: 'Meta mínima operacional recomendada: 80%.',
@@ -279,6 +297,7 @@ export default function Dashboard({ user, onNavigateTab }) {
     const normalPending = activeTasks.filter(t => t.status === 'Pendente' && !isTaskOverdue(t)).length;
     if (normalPending > 0) {
       alerts.push({
+        id: `tarefas-pendentes-inicio-${selectedPeriod}`,
         type: 'info',
         message: `${normalPending} condicionante${normalPending > 1 ? 's agendadas' : ' agendada'} aguardando início.`,
         details: 'Consulte o cronograma de atividades para iniciar a execução.',
@@ -287,7 +306,12 @@ export default function Dashboard({ user, onNavigateTab }) {
     }
 
     return alerts;
-  }, [activeTasks, periodMetrics, documentos, user.role]);
+  }, [activeTasks, periodMetrics, documentos, user.role, selectedPeriod]);
+
+  // Filtra alertas que ainda não foram marcados como vistos pelo usuário
+  const unseenAlertsCount = useMemo(() => {
+    return systemAlerts.filter(alert => !alertasVistos.includes(alert.id)).length;
+  }, [systemAlerts, alertasVistos]);
 
   // Ações Recomendadas (Top 5 tarefas mais urgentes)
   const urgentActions = useMemo(() => {
@@ -333,6 +357,31 @@ export default function Dashboard({ user, onNavigateTab }) {
     }
   };
 
+  // Handler para marcar/desmarcar alerta como visto com persistência
+  const handleToggleAlertaVisto = async (alertId) => {
+    const isCurrentlyVisto = alertasVistos.includes(alertId);
+    const newVisto = !isCurrentlyVisto;
+
+    // Atualiza otimisticamente
+    if (newVisto) {
+      setAlertasVistos(prev => [...prev, alertId]);
+    } else {
+      setAlertasVistos(prev => prev.filter(id => id !== alertId));
+    }
+
+    try {
+      await api.marcarAlertaVisto(alertId, newVisto);
+    } catch (error) {
+      console.error("Erro ao alternar status de visto no banco de dados:", error);
+      // Reverte em caso de falha
+      if (newVisto) {
+        setAlertasVistos(prev => prev.filter(id => id !== alertId));
+      } else {
+        setAlertasVistos(prev => [...prev, alertId]);
+      }
+    }
+  };
+
   const maxRevenue = Math.max(
     ...anualData.map(m => Math.max(m.faturamento_condicionantes || 0, m.faturamento_renovacoes || 0)),
     1000
@@ -372,10 +421,86 @@ export default function Dashboard({ user, onNavigateTab }) {
             ))}
           </div>
 
-          <div style={styles.iconButton} title="Notificações">
+          {/* Sininho com Dropdown de Notificações */}
+          <div 
+            style={styles.iconButton} 
+            title="Notificações"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowNotifications(!showNotifications);
+            }}
+          >
             <Bell size={22} color="var(--text-main)" />
-            {periodMetrics.atrasadas > 0 && <span style={styles.notificationBadge}></span>}
+            {unseenAlertsCount > 0 && (
+              <span style={styles.notificationBadge}>
+                {unseenAlertsCount}
+              </span>
+            )}
+
+            {showNotifications && (
+              <div 
+                style={styles.notificationsDropdown} 
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div style={styles.dropdownHeader}>
+                  <h4 style={styles.dropdownTitle}>Alertas Regulatórios</h4>
+                  <span style={styles.dropdownSubtitle}>{unseenAlertsCount} não visto(s)</span>
+                </div>
+                <div style={styles.dropdownBody}>
+                  {systemAlerts.length > 0 ? (
+                    systemAlerts.map((alert) => {
+                      const isVisto = alertasVistos.includes(alert.id);
+                      return (
+                        <div 
+                          key={alert.id} 
+                          style={{
+                            ...styles.dropdownAlertCard,
+                            borderLeftColor: isVisto ? 'rgba(100, 116, 139, 0.4)' : (alert.type === 'danger' ? 'var(--danger)' : alert.type === 'warning' ? 'var(--warning)' : 'var(--primary)'),
+                            background: isVisto ? 'rgba(241, 245, 249, 0.5)' : (alert.type === 'danger' ? 'var(--danger-light)' : alert.type === 'warning' ? 'var(--warning-light)' : 'var(--primary-light)'),
+                            opacity: isVisto ? 0.65 : 1,
+                            display: 'flex',
+                            gap: '0.5rem',
+                            alignItems: 'flex-start',
+                            transition: 'all 0.2s ease',
+                          }}
+                        >
+                          <input 
+                            type="checkbox"
+                            checked={isVisto}
+                            onChange={() => handleToggleAlertaVisto(alert.id)}
+                            style={styles.alertCheckbox}
+                            title={isVisto ? "Marcar como não visto" : "Marcar como visto"}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={styles.alertHeader}>
+                              {alert.icon}
+                              <span style={{ 
+                                ...styles.alertTitle, 
+                                color: isVisto ? 'var(--text-muted)' : (alert.type === 'danger' ? 'var(--danger)' : alert.type === 'warning' ? '#854d0e' : 'var(--primary)'),
+                                fontSize: '0.82rem',
+                                textDecoration: isVisto ? 'line-through' : 'none'
+                              }}>
+                                {alert.message}
+                              </span>
+                            </div>
+                            <p style={{ ...styles.alertDetails, fontSize: '0.74rem', marginTop: '0.15rem' }}>{alert.details}</p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div style={styles.emptyDropdown}>
+                      <CheckCircle2 size={24} color="var(--success)" />
+                      <p style={{ marginTop: '0.5rem', fontWeight: '600', fontSize: '0.85rem' }}>Nenhum alerta!</p>
+                      <p style={{ color: 'var(--text-light)', fontSize: '0.75rem', textAlign: 'center' }}>Tudo sob controle para este período.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
+
           <div 
             style={styles.iconButton} 
             title="Ver Calendário Completo"
@@ -489,7 +614,7 @@ export default function Dashboard({ user, onNavigateTab }) {
       <div style={styles.dashboardBodyRow}>
         
         {/* Lado Esquerdo: Classes de Condicionantes e Gráficos */}
-        <div style={{ ...styles.column, flex: 2 }}>
+        <div style={{ ...styles.column, flex: 1.8 }}>
           
           {/* Sessão 1: Agrupamento por Classe de Condicionantes */}
           <div className="glass-panel" style={styles.panel}>
@@ -568,52 +693,6 @@ export default function Dashboard({ user, onNavigateTab }) {
             </div>
           </div>
 
-          {/* Sessão 2: Visão Comparativa de Prazos */}
-          <div className="glass-panel" style={styles.panel}>
-            <div style={styles.panelHeader}>
-              <CalendarDays size={20} color="var(--primary)" />
-              <h3 style={styles.panelTitle}>Visão Comparativa de Prazos</h3>
-            </div>
-            <p style={styles.panelDescription}>
-              Proporção de status de condicionantes em termos mensais, bimestrais e trimestrais.
-            </p>
-            <div style={styles.comparisonList}>
-              {comparativePeriods.map(period => {
-                const compliance = period.total > 0 ? Math.round((period.concl / period.total) * 100) : 100;
-                const pConcl = period.total > 0 ? (period.concl / period.total) * 100 : 0;
-                const pProc = period.total > 0 ? (period.proc / period.total) * 100 : 0;
-                const pPend = period.total > 0 ? ((period.pend + period.atras) / period.total) * 100 : 0;
-
-                return (
-                  <div key={period.key} style={styles.comparisonItem}>
-                    <div style={styles.comparisonLabelRow}>
-                      <span style={styles.comparisonName}>{period.label}</span>
-                      <span style={styles.comparisonDetails}>
-                        Total: <strong>{period.total}</strong> | Compliance: <strong style={{ color: compliance >= 80 ? 'var(--success)' : 'var(--danger)' }}>{compliance}%</strong>
-                      </span>
-                    </div>
-                    <div style={styles.comparisonBarOuter}>
-                      {period.total > 0 ? (
-                        <>
-                          {pConcl > 0 && <div style={{ ...styles.comparisonBarInner, width: `${pConcl}%`, background: 'var(--success)' }} title={`Concluídas: ${Math.round(pConcl)}%`}></div>}
-                          {pProc > 0 && <div style={{ ...styles.comparisonBarInner, width: `${pProc}%`, background: '#eab308' }} title={`Em Processo: ${Math.round(pProc)}%`}></div>}
-                          {pPend > 0 && <div style={{ ...styles.comparisonBarInner, width: `${pPend}%`, background: 'var(--danger)' }} title={`Pendente/Atrasada: ${Math.round(pPend)}%`}></div>}
-                        </>
-                      ) : (
-                        <div style={styles.comparisonBarEmpty}>Nenhuma obrigação</div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div style={styles.chartLegend}>
-              <div style={styles.legendItem}><div style={{ ...styles.legendDot, background: 'var(--success)' }}></div><span>Concluídas</span></div>
-              <div style={styles.legendItem}><div style={{ ...styles.legendDot, background: '#eab308' }}></div><span>Em Processo</span></div>
-              <div style={styles.legendItem}><div style={{ ...styles.legendDot, background: 'var(--danger)' }}></div><span>Pendentes / Atrasadas</span></div>
-            </div>
-          </div>
-
           {/* Gráfico Anual (Apenas Admins/Consultores) */}
           {(user.role === 'admin' || user.role === 'consultor') && (
             <div className="glass-panel" style={{ ...styles.panel, height: '360px' }}>
@@ -662,49 +741,9 @@ export default function Dashboard({ user, onNavigateTab }) {
 
         </div>
 
-        {/* Lado Direito: Alertas e O Que Precisa Ser Feito */}
-        <div style={{ ...styles.column, flex: 1.25 }}>
+        {/* Lado Direito: Ações Recomendadas e Visão Comparativa de Prazos */}
+        <div style={{ ...styles.column, flex: 1.2 }}>
           
-          {/* Painel de Alertas Inteligentes */}
-          <div className="glass-panel" style={styles.panel}>
-            <div style={styles.panelHeader}>
-              <Bell size={20} color="var(--primary)" />
-              <h3 style={styles.panelTitle}>Alertas Regulatórios e Operacionais</h3>
-            </div>
-            
-            <div style={styles.alertsContainer}>
-              {systemAlerts.length > 0 ? (
-                systemAlerts.map((alert, index) => (
-                  <div 
-                    key={index} 
-                    style={{
-                      ...styles.alertCard,
-                      borderLeftColor: alert.type === 'danger' ? 'var(--danger)' : alert.type === 'warning' ? 'var(--warning)' : 'var(--primary)',
-                      background: alert.type === 'danger' ? 'var(--danger-light)' : alert.type === 'warning' ? 'var(--warning-light)' : 'var(--primary-light)'
-                    }}
-                  >
-                    <div style={styles.alertHeader}>
-                      {alert.icon}
-                      <span style={{ 
-                        ...styles.alertTitle, 
-                        color: alert.type === 'danger' ? 'var(--danger)' : alert.type === 'warning' ? '#854d0e' : 'var(--primary)' 
-                      }}>
-                        {alert.message}
-                      </span>
-                    </div>
-                    <p style={styles.alertDetails}>{alert.details}</p>
-                  </div>
-                ))
-              ) : (
-                <div style={styles.emptyAlerts}>
-                  <CheckCircle2 size={36} color="var(--success)" />
-                  <p style={{ marginTop: '0.5rem', fontWeight: '600' }}>Nenhum alerta pendente!</p>
-                  <p style={{ color: 'var(--text-light)', fontSize: '0.8rem' }}>Tudo em conformidade regulatória para o período selecionado.</p>
-                </div>
-              )}
-            </div>
-          </div>
-
           {/* O Que Precisa Ser Feito (Ações Recomendadas) */}
           <div className="glass-panel" style={styles.panel}>
             <div style={styles.panelHeader}>
@@ -768,6 +807,52 @@ export default function Dashboard({ user, onNavigateTab }) {
                   <p style={{ color: 'var(--text-light)', fontSize: '0.8rem' }}>Sem pendências críticas ou de execução urgente no período.</p>
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Sessão 2: Visão Comparativa de Prazos */}
+          <div className="glass-panel" style={styles.panel}>
+            <div style={styles.panelHeader}>
+              <CalendarDays size={20} color="var(--primary)" />
+              <h3 style={styles.panelTitle}>Visão Comparativa de Prazos</h3>
+            </div>
+            <p style={styles.panelDescription}>
+              Proporção de status de condicionantes em termos mensais, bimestrais e trimestrais.
+            </p>
+            <div style={styles.comparisonList}>
+              {comparativePeriods.map(period => {
+                const compliance = period.total > 0 ? Math.round((period.concl / period.total) * 100) : 100;
+                const pConcl = period.total > 0 ? (period.concl / period.total) * 100 : 0;
+                const pProc = period.total > 0 ? (period.proc / period.total) * 100 : 0;
+                const pPend = period.total > 0 ? ((period.pend + period.atras) / period.total) * 100 : 0;
+
+                return (
+                  <div key={period.key} style={styles.comparisonItem}>
+                    <div style={styles.comparisonLabelRow}>
+                      <span style={styles.comparisonName}>{period.label}</span>
+                      <span style={styles.comparisonDetails}>
+                        Total: <strong>{period.total}</strong> | Compliance: <strong style={{ color: compliance >= 80 ? 'var(--success)' : 'var(--danger)' }}>{compliance}%</strong>
+                      </span>
+                    </div>
+                    <div style={styles.comparisonBarOuter}>
+                      {period.total > 0 ? (
+                        <>
+                          {pConcl > 0 && <div style={{ ...styles.comparisonBarInner, width: `${pConcl}%`, background: 'var(--success)' }} title={`Concluídas: ${Math.round(pConcl)}%`}></div>}
+                          {pProc > 0 && <div style={{ ...styles.comparisonBarInner, width: `${pProc}%`, background: '#eab308' }} title={`Em Processo: ${Math.round(pProc)}%`}></div>}
+                          {pPend > 0 && <div style={{ ...styles.comparisonBarInner, width: `${pPend}%`, background: 'var(--danger)' }} title={`Pendente/Atrasada: ${Math.round(pPend)}%`}></div>}
+                        </>
+                      ) : (
+                        <div style={styles.comparisonBarEmpty}>Nenhuma obrigação</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={styles.chartLegend}>
+              <div style={styles.legendItem}><div style={{ ...styles.legendDot, background: 'var(--success)' }}></div><span>Concluídas</span></div>
+              <div style={styles.legendItem}><div style={{ ...styles.legendDot, background: '#eab308' }}></div><span>Em Processo</span></div>
+              <div style={styles.legendItem}><div style={{ ...styles.legendDot, background: 'var(--danger)' }}></div><span>Pendentes / Atrasadas</span></div>
             </div>
           </div>
 
@@ -846,13 +931,82 @@ const styles = {
   },
   notificationBadge: {
     position: 'absolute',
-    top: '10px',
-    right: '10px',
-    width: '8px',
-    height: '8px',
-    borderRadius: '50%',
+    top: '-4px',
+    right: '-4px',
     background: 'var(--danger)',
+    color: '#ffffff',
+    fontSize: '0.7rem',
+    fontWeight: '700',
+    borderRadius: '50%',
+    width: '18px',
+    height: '18px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
     border: '2px solid var(--bg-main)',
+  },
+  notificationsDropdown: {
+    position: 'absolute',
+    top: '48px',
+    right: '0px',
+    width: '340px',
+    background: 'var(--bg-main)',
+    border: '1px solid var(--glass-border)',
+    borderRadius: '12px',
+    boxShadow: 'var(--shadow-lg)',
+    zIndex: 1000,
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    maxHeight: '450px',
+    backdropFilter: 'blur(20px)',
+  },
+  dropdownHeader: {
+    padding: '0.75rem 1rem',
+    borderBottom: '1px solid var(--glass-border)',
+    background: 'rgba(255, 255, 255, 0.4)',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  dropdownTitle: {
+    fontSize: '0.85rem',
+    fontWeight: '700',
+    color: 'var(--text-main)',
+    margin: 0,
+  },
+  dropdownSubtitle: {
+    fontSize: '0.72rem',
+    color: 'var(--text-muted)',
+    fontWeight: '500',
+  },
+  dropdownBody: {
+    padding: '0.75rem',
+    overflowY: 'auto',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.5rem',
+  },
+  dropdownAlertCard: {
+    borderLeft: '3px solid',
+    borderRadius: '8px',
+    padding: '0.65rem 0.85rem',
+    textAlign: 'left',
+  },
+  emptyDropdown: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '2rem 1rem',
+    color: 'var(--text-muted)',
+  },
+  alertCheckbox: {
+    width: '16px',
+    height: '16px',
+    cursor: 'pointer',
+    accentColor: 'var(--primary)',
+    marginTop: '2px',
   },
   cardGrid: {
     display: 'grid',
@@ -1027,40 +1181,6 @@ const styles = {
     color: 'var(--text-light)',
     fontWeight: '600',
   },
-  alertsContainer: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.75rem',
-  },
-  alertCard: {
-    borderLeft: '4px solid',
-    borderRadius: '10px',
-    padding: '0.85rem 1rem',
-    textAlign: 'left',
-  },
-  alertHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-  },
-  alertTitle: {
-    fontSize: '0.875rem',
-    fontWeight: '700',
-  },
-  alertDetails: {
-    fontSize: '0.78rem',
-    color: 'var(--text-muted)',
-    marginTop: '0.25rem',
-    lineHeight: '1.4',
-  },
-  emptyAlerts: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '2.5rem 1rem',
-    color: 'var(--text-main)',
-  },
   todoList: {
     display: 'flex',
     flexDirection: 'column',
@@ -1156,13 +1276,6 @@ const styles = {
     justifyContent: 'center',
     padding: '2.5rem 1rem',
     color: 'var(--text-main)',
-  },
-  chartPanel: {
-    padding: '1.75rem',
-    display: 'flex',
-    flexDirection: 'column',
-    height: '420px',
-    textAlign: 'left',
   },
   chartArea: {
     flex: 1,
