@@ -17,6 +17,35 @@ import {
   Briefcase
 } from 'lucide-react';
 
+const pieColors = [
+  'var(--primary, #2563eb)',
+  '#8b5cf6',
+  '#ec4899',
+  '#f59e0b',
+  '#10b981',
+  '#6b7280'
+];
+
+function getSlicePath(startPercent, endPercent) {
+  const getCoordinates = (percent) => {
+    const angle = (percent - 0.25) * 2 * Math.PI;
+    const x = 50 + 40 * Math.cos(angle);
+    const y = 50 + 40 * Math.sin(angle);
+    return { x, y };
+  };
+
+  const start = getCoordinates(startPercent);
+  const end = getCoordinates(endPercent);
+  const largeArcFlag = endPercent - startPercent > 0.5 ? 1 : 0;
+
+  return [
+    `M 50 50`,
+    `L ${start.x} ${start.y}`,
+    `A 40 40 0 ${largeArcFlag} 1 ${end.x} ${end.y}`,
+    `Z`
+  ].join(' ');
+}
+
 export default function Dashboard({ user, onNavigateTab }) {
   const [allTasks, setAllTasks] = useState([]);
   const [csList, setCsList] = useState([]);
@@ -204,6 +233,46 @@ export default function Dashboard({ user, onNavigateTab }) {
       return b.total - a.total;
     });
   }, [activeTasks, csList]);
+
+  // Principais Condicionantes para Gráfico de Pizza
+  const topCondicionantesPieData = useMemo(() => {
+    const counts = {};
+    activeTasks.forEach(t => {
+      const title = t.titulo || 'Outros';
+      counts[title] = (counts[title] || 0) + 1;
+    });
+
+    const sorted = Object.entries(counts)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+
+    const top5 = sorted.slice(0, 5);
+    const othersValue = sorted.slice(5).reduce((acc, curr) => acc + curr.value, 0);
+    
+    if (othersValue > 0) {
+      top5.push({ name: 'Outras', value: othersValue });
+    }
+
+    const total = top5.reduce((acc, curr) => acc + curr.value, 0);
+    
+    let accumulatedPercent = 0;
+    const slices = top5.map((item, index) => {
+      const percent = total > 0 ? (item.value / total) : 0;
+      const startPercent = accumulatedPercent;
+      accumulatedPercent += percent;
+      const endPercent = accumulatedPercent;
+      
+      return {
+        ...item,
+        percent,
+        startPercent,
+        endPercent,
+        index
+      };
+    });
+
+    return { slices, total };
+  }, [activeTasks]);
 
   // Alertas Inteligentes do Período com IDs Únicos para marcação de Vistos
   const systemAlerts = useMemo(() => {
@@ -853,6 +922,107 @@ export default function Dashboard({ user, onNavigateTab }) {
               <div style={styles.legendItem}><div style={{ ...styles.legendDot, background: 'var(--success)' }}></div><span>Concluídas</span></div>
               <div style={styles.legendItem}><div style={{ ...styles.legendDot, background: '#eab308' }}></div><span>Em Processo</span></div>
               <div style={styles.legendItem}><div style={{ ...styles.legendDot, background: 'var(--danger)' }}></div><span>Pendentes / Atrasadas</span></div>
+            </div>
+          </div>
+
+          {/* Sessão 3: Principais Condicionantes (Gráfico de Pizza) */}
+          <div className="glass-panel" style={styles.panel}>
+            <div style={styles.panelHeader}>
+              <Award size={20} color="var(--primary)" />
+              <h3 style={styles.panelTitle}>Principais Condicionantes</h3>
+            </div>
+            <p style={styles.panelDescription}>
+              Distribuição e volumetria das condicionantes mais frequentes no período ({selectedPeriod}).
+            </p>
+            
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '1.5rem',
+              flexWrap: 'wrap',
+              marginTop: '1rem',
+              padding: '0.5rem 0'
+            }}>
+              {topCondicionantesPieData.total > 0 ? (
+                <>
+                  <div style={{ position: 'relative', width: '130px', height: '130px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <svg viewBox="0 0 100 100" style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }}>
+                      {topCondicionantesPieData.slices.map((slice, idx) => {
+                        const pathData = getSlicePath(slice.startPercent, slice.endPercent);
+                        return (
+                          <path
+                            key={idx}
+                            d={pathData}
+                            fill={pieColors[idx % pieColors.length]}
+                            style={{ transition: 'all 0.3s ease' }}
+                          />
+                        );
+                      })}
+                      <circle cx="50" cy="50" r="24" fill="var(--card-bg, #ffffff)" />
+                    </svg>
+                    <div style={{
+                      position: 'absolute',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      pointerEvents: 'none'
+                    }}>
+                      <span style={{ fontSize: '1.25rem', fontWeight: '800', color: 'var(--text-main)', lineHeight: 1 }}>
+                        {topCondicionantesPieData.total}
+                      </span>
+                      <span style={{ fontSize: '0.65rem', color: 'var(--text-light)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.5px', marginTop: '2px' }}>
+                        Total
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{
+                    flex: 1,
+                    minWidth: '150px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.5rem'
+                  }}>
+                    {topCondicionantesPieData.slices.map((slice, idx) => (
+                      <div key={idx} style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '0.5rem',
+                        fontSize: '0.8rem'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', minWidth: 0, flex: 1 }}>
+                          <div style={{
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '50%',
+                            backgroundColor: pieColors[idx % pieColors.length],
+                            flexShrink: 0
+                          }}></div>
+                          <span style={{
+                            color: 'var(--text-main)',
+                            fontWeight: '500',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                          }} title={slice.name}>
+                            {slice.name}
+                          </span>
+                        </div>
+                        <span style={{ color: 'var(--text-muted)', fontWeight: '700', flexShrink: 0 }}>
+                          {slice.value} ({Math.round(slice.percent * 100)}%)
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                  Nenhuma condicionante no período
+                </div>
+              )}
             </div>
           </div>
 
