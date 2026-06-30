@@ -149,6 +149,7 @@ const MultiSelectDropdown = ({ label, options, selectedValues, onChange, placeho
 export default function Cronograma({ user, onViewTask, onViewDocument, onNavigateTab }) {
   const [activeTab, setActiveTab] = useState('planilha'); // 'planilha', 'timeline', 'lista'
   const [planilhaFullScreen, setPlanilhaFullScreen] = useState(false);
+  const [planilhaGroupBy, setPlanilhaGroupBy] = useState('classe'); // 'classe' ou 'empresa'
 
   // Auxiliar para obter o período de meses padrão
   const getPlanilhaDefaultDates = () => {
@@ -732,7 +733,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   }, [tasksFiltered, planilhaDataInicio, planilhaDataFim, planilhaFocusedMonth, planilhaFocusedWeek]);
 
   const planilhaCompanyRows = useMemo(() => {
-    const companyTasksMap = {};
+    const tasksMap = {};
     
     planilhaTasks.forEach(t => {
       const taskDate = new Date(t.data_vencimento);
@@ -761,19 +762,20 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
       
       const hasCol = planilhaColumns.some(col => col.key === key);
       if (hasCol) {
-        if (!companyTasksMap[t.empresa_id]) {
-          companyTasksMap[t.empresa_id] = {};
+        const groupKey = planilhaGroupBy === 'classe' ? (t.classe_servico_id || 'sem-classe') : t.empresa_id;
+        if (!tasksMap[groupKey]) {
+          tasksMap[groupKey] = {};
           planilhaColumns.forEach(col => {
-            companyTasksMap[t.empresa_id][col.key] = [];
+            tasksMap[groupKey][col.key] = [];
           });
         }
-        companyTasksMap[t.empresa_id][key].push(t);
+        tasksMap[groupKey][key].push(t);
       }
     });
     
     const rows = [];
-    Object.keys(companyTasksMap).forEach(companyId => {
-      const monthTasks = companyTasksMap[companyId];
+    Object.keys(tasksMap).forEach(groupId => {
+      const monthTasks = tasksMap[groupId];
       
       let maxTasks = 0;
       planilhaColumns.forEach(col => {
@@ -783,9 +785,14 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
       });
       
       if (maxTasks > 0) {
+        const name = planilhaGroupBy === 'classe' 
+          ? (groupId === 'sem-classe' ? 'Sem Classe Definida' : getClasseServicoNome(groupId))
+          : getEmpresaNome(groupId);
         rows.push({
-          companyId,
-          companyName: getEmpresaNome(companyId),
+          groupId,
+          groupName: name,
+          companyId: planilhaGroupBy === 'empresa' ? groupId : null,
+          companyName: planilhaGroupBy === 'empresa' ? name : null,
           rowsCount: maxTasks,
           monthTasks
         });
@@ -793,13 +800,13 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
     });
     
     rows.sort((a, b) => {
-      const nameA = a.companyName || '';
-      const nameB = b.companyName || '';
+      const nameA = a.groupName || '';
+      const nameB = b.groupName || '';
       return nameA.localeCompare(nameB);
     });
     
     return rows;
-  }, [planilhaTasks, planilhaColumns, empresas, planilhaFocusedMonth, planilhaFocusedWeek]);
+  }, [planilhaTasks, planilhaColumns, empresas, classeServicos, planilhaFocusedMonth, planilhaFocusedWeek, planilhaGroupBy]);
 
   // --- HANDLERS DA PLANILHA OPERACIONAL ---
   const handlePlanilhaDataInicioChange = (val) => {
@@ -1089,6 +1096,27 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
           </div>
           
           <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginRight: '0.5rem' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-muted)' }}>Agrupar por:</span>
+              <select
+                value={planilhaGroupBy}
+                onChange={(e) => setPlanilhaGroupBy(e.target.value)}
+                style={{
+                  padding: '0.35rem 0.6rem',
+                  borderRadius: '8px',
+                  fontSize: '0.75rem',
+                  fontWeight: '600',
+                  border: '1px solid rgba(0, 0, 0, 0.15)',
+                  background: 'rgba(255, 255, 255, 0.8)',
+                  color: 'var(--text-main)',
+                  outline: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="classe">Classe de Serviço</option>
+                <option value="empresa">Cliente</option>
+              </select>
+            </div>
             {planilhaFocusedMonth && (
               <button 
                 onClick={() => {
@@ -1167,7 +1195,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
               <thead>
                 <tr>
                   <th rowSpan={2} style={{ ...styles.planilhaTh, width: '35px' }}>Nº</th>
-                  <th rowSpan={2} style={{ ...styles.planilhaTh, width: '180px' }}>Nome do Cliente</th>
+                  <th rowSpan={2} style={{ ...styles.planilhaTh, width: '180px' }}>{planilhaGroupBy === 'classe' ? 'Classe de Serviço' : 'Nome do Cliente'}</th>
                   {planilhaColumns.map(col => (
                     <th 
                       key={col.key} 
@@ -1228,19 +1256,19 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                       const isFirstRow = i === 0;
                       
                       rows.push(
-                        <tr key={`${comp.companyId}-plan-row-${i}`} style={{ borderBottom: i === comp.rowsCount - 1 ? '1px solid rgba(0,0,0,0.12)' : 'none' }}>
+                        <tr key={`${comp.groupId}-plan-row-${i}`} style={{ borderBottom: i === comp.rowsCount - 1 ? '1px solid rgba(0,0,0,0.12)' : 'none' }}>
                           {/* Nº da Linha */}
                           <td style={styles.planilhaTdIndex}>
                             {globalRowIndex}
                           </td>
                           
-                          {/* Nome do Cliente (Mergeado via rowSpan) */}
+                          {/* Nome do Grupo (Mergeado via rowSpan) */}
                           {isFirstRow && (
                             <td 
                               rowSpan={comp.rowsCount} 
                               style={styles.planilhaTdClient}
                             >
-                              {comp.companyName}
+                              {comp.groupName}
                             </td>
                           )}
                           
@@ -1266,6 +1294,11 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
                                       <span style={styles.planilhaTaskTitle}>
                                         {task.titulo}
                                       </span>
+                                      {planilhaGroupBy === 'classe' && (
+                                        <span style={{ fontSize: '0.7rem', display: 'block', color: 'var(--text-muted)', marginTop: '2px', fontWeight: '500' }}>
+                                          {getEmpresaNome(task.empresa_id)}
+                                        </span>
+                                      )}
                                       <span style={styles.planilhaInfoIcon}>
                                         <Info size={11} style={{ color: getTaskStatusColor(task) }} />
                                       </span>
