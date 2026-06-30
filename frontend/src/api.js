@@ -267,8 +267,7 @@ export const api = {
     if (filters.empresa_id) params.append('empresa_id', filters.empresa_id);
     if (filters.documento_id) params.append('documento_id', filters.documento_id);
     if (filters.responsavel_id) params.append('responsavel_id', filters.responsavel_id);
-    if (filters.prestador_id) params.append('prestador_id', filters.prestador_id);
-    if (filters.classe_servico_id) params.append('prestador_id', filters.classe_servico_id);
+    if (filters.classe_servico_id) params.append('classe_servico_id', filters.classe_servico_id);
     if (filters.status) params.append('status', filters.status);
     if (filters.data_inicio) params.append('data_inicio', filters.data_inicio);
     if (filters.data_fim) params.append('data_fim', filters.data_fim);
@@ -466,6 +465,51 @@ export const api = {
       headers: getHeaders(),
     });
     if (!response.ok) throw new Error('Falha ao inativar prestador');
+    return true;
+  },
+
+  // Classes de Serviço
+  async listClasseServicos() {
+    const response = await fetch(`${API_BASE_URL}/api/classe-servicos`, {
+      method: 'GET',
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error('Falha ao listar classes de serviço');
+    return response.json();
+  },
+
+  async createClasseServico(data) {
+    const response = await fetch(`${API_BASE_URL}/api/classe-servicos`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.detail || 'Falha ao criar classe de serviço');
+    }
+    return response.json();
+  },
+
+  async updateClasseServico(id, data) {
+    const response = await fetch(`${API_BASE_URL}/api/classe-servicos/${id}`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.detail || 'Falha ao atualizar classe de serviço');
+    }
+    return response.json();
+  },
+
+  async deleteClasseServico(id) {
+    const response = await fetch(`${API_BASE_URL}/api/classe-servicos/${id}`, {
+      method: 'DELETE',
+      headers: getHeaders(),
+    });
+    if (!response.ok) throw new Error('Falha ao inativar classe de serviço');
     return true;
   },
 };

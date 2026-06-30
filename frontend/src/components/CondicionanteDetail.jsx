@@ -25,6 +25,7 @@ export default function CondicionanteDetail({ taskId, user, onBack, onGoToCompan
   const [empresa, setEmpresa] = useState(null);
   const [documento, setDocumento] = useState(null);
   const [usuarios, setUsuarios] = useState([]);
+  const [classeServicos, setClasseServicos] = useState([]);
   const [prestadores, setPrestadores] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
@@ -47,6 +48,7 @@ export default function CondicionanteDetail({ taskId, user, onBack, onGoToCompan
       const promises = [
         api.getEmpresa(taskData.empresa_id),
         user.role !== 'cliente' ? api.listUsuarios() : Promise.resolve([]),
+        api.listClasseServicos(),
         api.listPrestadores()
       ];
       if (taskData.documento_id) {
@@ -56,9 +58,10 @@ export default function CondicionanteDetail({ taskId, user, onBack, onGoToCompan
       const results = await Promise.all(promises);
       setEmpresa(results[0]);
       setUsuarios(results[1]);
-      setPrestadores(results[2]);
+      setClasseServicos(results[2]);
+      setPrestadores(results[3]);
       if (taskData.documento_id) {
-        setDocumento(results[3]);
+        setDocumento(results[4]);
       }
     } catch (err) {
       console.error("Erro ao carregar detalhes da condicionante:", err);
@@ -97,15 +100,15 @@ export default function CondicionanteDetail({ taskId, user, onBack, onGoToCompan
     }
   };
 
-  const handleUpdatePrestador = async (prestadorId) => {
+  const handleUpdateClasseServico = async (classeServicoId) => {
     try {
       const updated = await api.updateTarefa(task._id, {
-        prestador_id: prestadorId || null
-      }, "Alterou o prestador de serviço da condicionante.");
+        classe_servico_id: classeServicoId || null
+      }, "Alterou a classe de serviço da condicionante.");
       setTask(updated);
-      showToast('success', 'Prestador de serviço atualizado com sucesso!');
+      showToast('success', 'Classe de serviço atualizada com sucesso!');
     } catch (err) {
-      showToast('error', err.message || 'Falha ao atualizar prestador de serviço.');
+      showToast('error', err.message || 'Falha ao atualizar classe de serviço.');
     }
   };
 
@@ -339,26 +342,49 @@ export default function CondicionanteDetail({ taskId, user, onBack, onGoToCompan
               </div>
 
               <div style={styles.infoField}>
-                <span style={styles.fieldLabel}>Prestador de Serviço</span>
+                <span style={styles.fieldLabel}>Classe de Serviço</span>
                 {user.role === 'admin' || user.role === 'consultor' ? (
                   <select 
-                    value={task.prestador_id || ''} 
-                    onChange={e => handleUpdatePrestador(e.target.value)}
+                    value={task.classe_servico_id || ''} 
+                    onChange={e => handleUpdateClasseServico(e.target.value)}
                     className="glass-input glass-select"
                     style={{ fontSize: '0.85rem', padding: '0.25rem 0.5rem', width: '100%', marginTop: '0.25rem' }}
                   >
-                    <option value="">Não atribuído</option>
-                    {prestadores.filter(p => p.ativo || p._id === task.prestador_id).map(p => (
-                      <option key={p._id} value={p._id}>{p.nome}</option>
+                    <option value="">Não atribuída</option>
+                    {classeServicos.filter(cs => cs.ativo || cs._id === task.classe_servico_id).map(cs => (
+                      <option key={cs._id} value={cs._id}>{cs.nome}</option>
                     ))}
                   </select>
                 ) : (
                   <span style={styles.fieldValue}>
-                    <User size={14} style={{ marginRight: '0.25rem', display: 'inline-block' }} />
-                    {task.prestador_id ? (prestadores.find(p => p._id === task.prestador_id)?.nome || 'Carregando...') : 'Não atribuído'}
+                    <Briefcase size={14} style={{ marginRight: '0.25rem', display: 'inline-block' }} />
+                    {task.classe_servico_id ? (classeServicos.find(cs => cs._id === task.classe_servico_id)?.nome || 'Carregando...') : 'Não atribuída'}
                   </span>
                 )}
               </div>
+
+              {task.classe_servico_id && (
+                <div style={styles.infoField}>
+                  <span style={styles.fieldLabel}>Prestador Designado</span>
+                  <span style={{ ...styles.fieldValue, fontWeight: '600' }}>
+                    {(() => {
+                      const csObj = classeServicos.find(cs => cs._id === task.classe_servico_id);
+                      if (csObj && csObj.prestador_id) {
+                        const provObj = prestadores.find(p => p._id === csObj.prestador_id);
+                        return provObj ? (
+                          <a 
+                            href={`#/prestadores/${provObj._id}`} 
+                            style={{ color: 'var(--primary)', textDecoration: 'underline' }}
+                          >
+                            {provObj.nome}
+                          </a>
+                        ) : 'Sem prestador cadastrado';
+                      }
+                      return 'Sem prestador associado a esta classe';
+                    })()}
+                  </span>
+                </div>
+              )}
 
               {task.e_pre_requisito && (
                 <div style={{ ...styles.infoField, background: 'rgba(37, 99, 235, 0.05)', padding: '0.5rem 0.75rem', borderRadius: '8px', borderLeft: '3px solid var(--primary)', marginTop: '0.25rem' }}>

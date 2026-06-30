@@ -21,6 +21,7 @@ import {
 export default function Relatorios({ user }) {
   // Dados de Referência (carregados no início para alimentar os filtros)
   const [empresasRef, setEmpresasRef] = useState([]);
+  const [classeServicosRef, setClasseServicosRef] = useState([]);
   const [prestadoresRef, setPrestadoresRef] = useState([]);
   
   // Resultados da busca pós-"Gerar Relatório"
@@ -48,7 +49,7 @@ export default function Relatorios({ user }) {
 
   // FILTROS - Aba Condicionantes
   const [filtroCondEmpresa, setFiltroCondEmpresa] = useState('');
-  const [filtroCondPrestador, setFiltroCondPrestador] = useState('');
+  const [filtroCondClasse, setFiltroCondClasse] = useState('');
   const [filtroCondStatus, setFiltroCondStatus] = useState('');
   const [filtroCondInicio, setFiltroCondInicio] = useState('');
   const [filtroCondFim, setFiltroCondFim] = useState('');
@@ -62,11 +63,13 @@ export default function Relatorios({ user }) {
   // Carrega referências primárias para os seletores ao montar
   const loadReferences = async () => {
     try {
-      const [eList, pList] = await Promise.all([
+      const [eList, csList, pList] = await Promise.all([
         user.role !== 'cliente' ? api.listEmpresas() : Promise.resolve([]),
+        api.listClasseServicos(),
         api.listPrestadores()
       ]);
       setEmpresasRef(eList);
+      setClasseServicosRef(csList);
       setPrestadoresRef(pList);
     } catch (err) {
       console.error("Erro ao carregar referências de filtros:", err);
@@ -162,8 +165,8 @@ export default function Relatorios({ user }) {
         } else if (filtroCondEmpresa) {
           filters.empresa_id = filtroCondEmpresa;
         }
-        if (filtroCondPrestador) {
-          filters.prestador_id = filtroCondPrestador;
+        if (filtroCondClasse) {
+          filters.classe_servico_id = filtroCondClasse;
         }
         if (filtroCondStatus) {
           filters.status = filtroCondStatus;
@@ -249,7 +252,8 @@ export default function Relatorios({ user }) {
       groups['sem_prestador'] = { label: 'Sem Prestador Designado', tarefas: [], totalValor: 0, totalCusto: 0 };
 
       tarefasRes.forEach(t => {
-        const pId = t.prestador_id;
+        const cs = classeServicosRef.find(c => c._id === t.classe_servico_id);
+        const pId = cs?.prestador_id;
         if (pId && groups[pId]) {
           groups[pId].tarefas.push(t);
           groups[pId].totalValor += t.valor_estimado || 0;
@@ -265,16 +269,23 @@ export default function Relatorios({ user }) {
     
     else if (filtroCondAgrupamento === 'classe') {
       const groups = {};
-      tarefasRes.forEach(t => {
-        const key = t.titulo || 'Sem Título';
-        if (!groups[key]) {
-          groups[key] = { label: key, tarefas: [], totalValor: 0, totalCusto: 0 };
-        }
-        groups[key].tarefas.push(t);
-        groups[key].totalValor += t.valor_estimado || 0;
-        groups[key].totalCusto += t.custo_projetado || 0;
+      classeServicosRef.forEach(cs => {
+        groups[cs._id] = { label: cs.nome, tarefas: [], totalValor: 0, totalCusto: 0 };
       });
-      return Object.values(groups);
+      groups['sem_classe'] = { label: 'Sem Classe de Serviço', tarefas: [], totalValor: 0, totalCusto: 0 };
+
+      tarefasRes.forEach(t => {
+        if (t.classe_servico_id && groups[t.classe_servico_id]) {
+          groups[t.classe_servico_id].tarefas.push(t);
+          groups[t.classe_servico_id].totalValor += t.valor_estimado || 0;
+          groups[t.classe_servico_id].totalCusto += t.custo_projetado || 0;
+        } else {
+          groups['sem_classe'].tarefas.push(t);
+          groups['sem_classe'].totalValor += t.valor_estimado || 0;
+          groups['sem_classe'].totalCusto += t.custo_projetado || 0;
+        }
+      });
+      return Object.values(groups).filter(g => g.tarefas.length > 0);
     }
     return [];
   };
@@ -547,11 +558,11 @@ export default function Relatorios({ user }) {
                 </div>
               )}
               <div className="glass-input-group" style={{ margin: 0 }}>
-                <label className="glass-label">Prestador de Serviço</label>
-                <select value={filtroCondPrestador} onChange={e => setFiltroCondPrestador(e.target.value)} className="glass-input glass-select">
-                  <option value="">Todos</option>
-                  {prestadoresRef.map(p => (
-                    <option key={p._id} value={p._id}>{p.nome}</option>
+                <label className="glass-label">Classe de Serviço</label>
+                <select value={filtroCondClasse} onChange={e => setFiltroCondClasse(e.target.value)} className="glass-input glass-select">
+                  <option value="">Todas</option>
+                  {classeServicosRef.map(cs => (
+                    <option key={cs._id} value={cs._id}>{cs.nome}</option>
                   ))}
                 </select>
               </div>
@@ -578,7 +589,7 @@ export default function Relatorios({ user }) {
                 <label className="glass-label">Opção de Agrupamento</label>
                 <select value={filtroCondAgrupamento} onChange={e => setFiltroCondAgrupamento(e.target.value)} className="glass-input glass-select">
                   <option value="prestador">Agrupar por Prestador de Serviço</option>
-                  <option value="classe">Agrupar por Condicionante</option>
+                  <option value="classe">Agrupar por Classe de Serviço</option>
                   <option value="nenhum">Sem Agrupamento (Listagem Plana)</option>
                 </select>
               </div>

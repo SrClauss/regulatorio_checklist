@@ -375,8 +375,8 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
       ]);
       
       const mergedMap = {};
-      timelineTasks.forEach(t => mergedMap[t._id] = { ...t, classe_servico_id: t.prestador_id });
-      overdueTasks.forEach(t => mergedMap[t._id] = { ...t, classe_servico_id: t.prestador_id });
+      timelineTasks.forEach(t => mergedMap[t._id] = t);
+      overdueTasks.forEach(t => mergedMap[t._id] = t);
       
       setTodasTarefas(Object.values(mergedMap));
     } catch (error) {
@@ -389,15 +389,16 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
   const fetchCronogramaData = async () => {
     try {
       setLoading(true);
-      const [empList, docList, prList] = await Promise.all([
+      const [empList, docList, csList, prList] = await Promise.all([
         api.listEmpresas(),
         api.listDocumentos(),
+        api.listClasseServicos(),
         api.listPrestadores()
       ]);
 
       setEmpresas(empList);
       setDocumentos(docList);
-      setClasseServicos(prList.map(p => ({ _id: p._id, nome: p.nome, prestador_id: p._id })));
+      setClasseServicos(csList);
       setPrestadores(prList);
       
       await fetchTasks(centerMonthDate);
@@ -617,19 +618,9 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
     }
   };
 
-  const uniqueTitles = useMemo(() => {
-    const titlesSet = new Set();
-    todasTarefas.forEach(t => {
-      if (t.titulo) {
-        titlesSet.add(t.titulo);
-      }
-    });
-    return Array.from(titlesSet).sort();
-  }, [todasTarefas]);
-
   const tasksFiltered = useMemo(() => {
     return todasTarefas.filter(t => {
-      if (selectedClasseServicoIds.length > 0 && !selectedClasseServicoIds.includes(t.titulo)) return false;
+      if (selectedClasseServicoIds.length > 0 && !selectedClasseServicoIds.includes(t.classe_servico_id)) return false;
       if (selectedCompanyIds.length > 0 && !selectedCompanyIds.includes(t.empresa_id)) return false;
       if (selectedDocumentIds.length > 0 && !selectedDocumentIds.includes(t.documento_id)) return false;
       if (minValor !== '' && (t.valor_estimado === undefined || t.valor_estimado === null || Number(t.valor_estimado) < Number(minValor))) return false;
@@ -2813,7 +2804,7 @@ export default function Cronograma({ user, onViewTask, onViewDocument, onNavigat
 
           <MultiSelectDropdown 
             label="Serviço:"
-            options={uniqueTitles.map(title => ({ value: title, label: title }))}
+            options={classeServicos.map(cs => ({ value: cs._id, label: cs.nome }))}
             selectedValues={selectedClasseServicoIds}
             onChange={setSelectedClasseServicoIds}
             placeholder="Todos os Serviços"

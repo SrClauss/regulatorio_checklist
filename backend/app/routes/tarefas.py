@@ -35,7 +35,7 @@ async def list_tasks(
     empresa_id: Optional[str] = Query(None),
     documento_id: Optional[str] = Query(None),
     responsavel_id: Optional[str] = Query(None),
-    prestador_id: Optional[str] = Query(None),
+    classe_servico_id: Optional[str] = Query(None),
     status_filtro: Optional[str] = Query(None, alias="status"),
     data_inicio: Optional[datetime] = Query(None),
     data_fim: Optional[datetime] = Query(None),
@@ -64,8 +64,8 @@ async def list_tasks(
         query["documento_id"] = ObjectId(documento_id)
     if responsavel_id and current_user.role != "cliente":
         query["responsavel_id"] = ObjectId(responsavel_id)
-    if prestador_id:
-        query["prestador_id"] = ObjectId(prestador_id)
+    if classe_servico_id:
+        query["classe_servico_id"] = ObjectId(classe_servico_id)
     if status_filtro:
         query["status"] = status_filtro
         

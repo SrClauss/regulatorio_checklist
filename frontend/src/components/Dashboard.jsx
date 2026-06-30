@@ -70,14 +70,14 @@ export default function Dashboard({ user, onNavigateTab }) {
         const endOfRange = new Date(now.getFullYear(), now.getMonth() + 3, 0, 23, 59, 59).toISOString();
 
         // Carrega dados agregados em paralelo
-        const [prevMensal, prevAnual, prListRes, docListRes, empListRes, tarefasAtrasadas, tarefasPeriodo, vistosRes] = await Promise.all([
+        const [prevMensal, prevAnual, csListRes, docListRes, empListRes, tarefasAtrasadas, tarefasPeriodo, vistosRes] = await Promise.all([
           (user.role === 'admin' || user.role === 'consultor') 
             ? api.getPrevisibilidadeMensal(mes, ano) 
             : Promise.resolve({ faturamento_total: 0, faturamento_renovacoes: 0, faturamento_condicionantes: 0 }),
           (user.role === 'admin' || user.role === 'consultor') 
             ? api.getPrevisibilidadeAnual(ano) 
             : Promise.resolve({ consolidado_mensal: [] }),
-          api.listPrestadores(),
+          api.listClasseServicos(),
           api.listDocumentos(),
           api.listEmpresas(),
           api.listTarefas({ status: 'Atrasado' }),
@@ -90,15 +90,15 @@ export default function Dashboard({ user, onNavigateTab }) {
           setAnualData(prevAnual.consolidado_mensal || []);
         }
 
-        setCsList(prListRes.map(p => ({ _id: p._id, nome: p.nome, prestador_id: p._id })));
+        setCsList(csListRes);
         setDocumentos(docListRes);
         setEmpresas(empListRes);
         setAlertasVistos(vistosRes || []);
 
         // Mesclar tarefas do período e as atrasadas
         const mergedTasksMap = {};
-        tarefasPeriodo.forEach(t => { mergedTasksMap[t._id] = { ...t, classe_servico_id: t.prestador_id }; });
-        tarefasAtrasadas.forEach(t => { mergedTasksMap[t._id] = { ...t, classe_servico_id: t.prestador_id }; });
+        tarefasPeriodo.forEach(t => { mergedTasksMap[t._id] = t; });
+        tarefasAtrasadas.forEach(t => { mergedTasksMap[t._id] = t; });
         setAllTasks(Object.values(mergedTasksMap));
 
       } catch (error) {

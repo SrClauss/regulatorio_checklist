@@ -12,7 +12,7 @@ class HistoricoObservacao(BaseModel):
 class TarefaBase(BaseModel):
     documento_id: Optional[PyObjectId] = Field(default=None, description="Documento do qual a condicionante faz parte (opcional)")
     empresa_id: PyObjectId = Field(..., description="Empresa atrelada a esta condicionante")
-    prestador_id: Optional[PyObjectId] = Field(default=None, description="Prestador vinculado a esta condicionante (opcional)")
+    classe_servico_id: Optional[PyObjectId] = Field(default=None, description="Classe de serviço vinculada a esta condicionante (opcional)")
     titulo: str
     descricao: Optional[str] = None
     tipo_id: str = Field(default="checklist_interno", description="checklist_interno, envio_orgao, laudo_tecnico, etc.")
@@ -35,7 +35,7 @@ class TarefaCreate(TarefaBase):
 class TarefaUpdate(BaseModel):
     documento_id: Optional[PyObjectId] = None
     empresa_id: Optional[PyObjectId] = None
-    prestador_id: Optional[PyObjectId] = None
+    classe_servico_id: Optional[PyObjectId] = None
     titulo: Optional[str] = None
     descricao: Optional[str] = None
     tipo_id: Optional[str] = None

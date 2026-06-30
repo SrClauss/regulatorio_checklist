@@ -16,6 +16,7 @@ from app.models.empresa import EmpresaDB
 from app.models.documento import DocumentoDB
 from app.models.tarefa import TarefaDB, HistoricoObservacao
 from app.models.prestador import PrestadorDB
+from app.models.classe_servico import ClasseServicoDB
 
 # Função utilitária para adicionar meses
 def add_months(sourcedate: datetime, months: int) -> datetime:
@@ -92,16 +93,77 @@ async def run_seed():
 
     print("-> 4 Prestadores de Serviço cadastrados.")
 
-    def get_prestador_id_for_title(title: str):
+    # 2c. Cria Classes de Serviço Mock vinculadas aos Prestadores
+    print("Cadastrando classes de serviço...")
+    classes_data = [
+        ("Dedetização / Controle de Pragas", "Serviços de dedetização, desinsetização e controle de vetores e pragas urbanas.", pid_controlx),
+        ("Análise de Potabilidade de Água", "Análises laboratoriais de potabilidade de água de consumo humano.", pid_aquaclean),
+        ("Calibração de Termômetros e Balanças", "Serviços de calibração periódica e certificação de instrumentos de medição.", pid_calibramed),
+        ("Elaboração/Revisão do PGRSS", "Serviços de engenharia e consultoria ambiental para PGRSS.", pid_solucoes),
+        ("Teste de Estanqueidade do Sistema", "Testes de estanqueidade em tanques e tubulações.", pid_solucoes),
+        ("Limpeza e Laudo da Caixa SAO", "Limpeza, higienização e emissão de laudo técnico de caixa separadora de água e óleo.", pid_solucoes),
+        ("Relatório Anual RAPP IBAMA", "Preenchimento e protocolo do Relatório de Atividades do IBAMA.", pid_solucoes),
+        ("Análise de Água de Poço de Monitoramento", "Coleta e análise físico-química e bacteriológica de água de poços de monitoramento.", pid_solucoes),
+        ("Laudo de Emissões Atmosféricas", "Medições e emissão de laudo técnico de emissões atmosféricas por chaminé ou fontes estacionárias.", pid_solucoes),
+        ("Relatório de Geração de Resíduos Sólidos", "Declaração e controle de resíduos gerados na atividade produtiva (MTR/DMR).", pid_solucoes),
+        ("Monitoramento de Ruído Limítrofe", "Avaliação de impacto sonoro em áreas habitadas vizinhas à empresa.", pid_solucoes),
+        ("Coleta de Resíduos de Saúde (Grupo A/B)", "Serviço de coleta, transporte e destinação final de resíduos de serviços de saúde.", pid_solucoes),
+        ("Laudo de Radioproteção e Calibração", "Ensaios de radiação e testes de radioproteção em equipamentos médicos.", pid_calibramed),
+        ("Treinamento MOPP de Motoristas", "Curso e atualização de motoristas para transporte de produtos perigosos.", pid_solucoes),
+        ("Ficha de Emergência e Envelopamento", "Confecção e revisão de fichas de emergência e envelopes de transporte regulamentares.", pid_solucoes),
+        ("Plano de Atendimento a Emergências (PAE)", "Elaboração de planos de contingência e atendimento a emergências ambientais.", pid_solucoes),
+        ("Envio de BMPO (Psicotrópicos)", "Envio periódico de balancete de medicamentos controlados para a vigilância sanitária.", pid_solucoes),
+        ("Revisão de Manual de Boas Práticas e POPs", "Elaboração e atualização de POPs e manual de boas práticas sanitárias.", pid_solucoes),
+    ]
+    
+    class_map = {}
+    for nome, desc, pid in classes_data:
+        cs = ClasseServicoDB(nome=nome, descricao=desc, prestador_id=pid, ativo=True)
+        cs_res = await db.classe_servicos.insert_one(cs.model_dump(by_alias=True, exclude={"id"}))
+        class_map[nome] = cs_res.inserted_id
+
+    print(f"-> {len(classes_data)} Classes de Serviço cadastradas.")
+
+    def get_classe_servico_id_for_title(title: str):
         title_lower = title.lower()
         if "dedetização" in title_lower or "pragas" in title_lower:
-            return pid_controlx
+            return class_map.get("Dedetização / Controle de Pragas")
         elif "potabilidade" in title_lower or "análise de água de consumo" in title_lower or "análise de potabilidade" in title_lower:
-            return pid_aquaclean
-        elif "calibração" in title_lower or "termômetro" in title_lower or "balança" in title_lower or "radioproteção" in title_lower:
-            return pid_calibramed
-        elif "pgrss" in title_lower or "estanqueidade" in title_lower or "caixa sao" in title_lower or "limpeza e laudo" in title_lower or "rapp ibama" in title_lower or "ibama" in title_lower or "poço de monitoramento" in title_lower or "água de poço" in title_lower or "emissões" in title_lower or "atmosféricas" in title_lower or "resíduos" in title_lower or "ruído" in title_lower or "coleta" in title_lower or "mopp" in title_lower or "envelopamento" in title_lower or "ficha de emergência" in title_lower or "emergências" in title_lower or "pae" in title_lower or "bmpo" in title_lower or "psicotrópicos" in title_lower or "boas práticas" in title_lower or "pop" in title_lower:
-            return pid_solucoes
+            return class_map.get("Análise de Potabilidade de Água")
+        elif "calibração" in title_lower or "termômetro" in title_lower or "balança" in title_lower:
+            if "radioproteção" in title_lower:
+                return class_map.get("Laudo de Radioproteção e Calibração")
+            return class_map.get("Calibração de Termômetros e Balanças")
+        elif "pgrss" in title_lower:
+            return class_map.get("Elaboração/Revisão do PGRSS")
+        elif "estanqueidade" in title_lower:
+            return class_map.get("Teste de Estanqueidade do Sistema")
+        elif "caixa sao" in title_lower or "limpeza e laudo" in title_lower:
+            return class_map.get("Limpeza e Laudo da Caixa SAO")
+        elif "rapp ibama" in title_lower or "ibama" in title_lower:
+            return class_map.get("Relatório Anual RAPP IBAMA")
+        elif "poço de monitoramento" in title_lower or "água de poço" in title_lower:
+            return class_map.get("Análise de Água de Poço de Monitoramento")
+        elif "emissões" in title_lower or "atmosféricas" in title_lower:
+            return class_map.get("Laudo de Emissões Atmosféricas")
+        elif "resíduos sólidos" in title_lower or "geração de resíduos" in title_lower:
+            return class_map.get("Relatório de Geração de Resíduos Sólidos")
+        elif "ruído" in title_lower or "sonora" in title_lower:
+            return class_map.get("Monitoramento de Ruído Limítrofe")
+        elif "grupo a/b" in title_lower or "coleta de resíduos" in title_lower:
+            return class_map.get("Coleta de Resíduos de Saúde (Grupo A/B)")
+        elif "radioproteção" in title_lower:
+            return class_map.get("Laudo de Radioproteção e Calibração")
+        elif "mopp" in title_lower or "treinamento" in title_lower:
+            return class_map.get("Treinamento MOPP de Motoristas")
+        elif "envelopamento" in title_lower or "ficha de emergência" in title_lower:
+            return class_map.get("Ficha de Emergência e Envelopamento")
+        elif "emergências" in title_lower or "pae" in title_lower:
+            return class_map.get("Plano de Atendimento a Emergências (PAE)")
+        elif "bmpo" in title_lower or "psicotrópicos" in title_lower:
+            return class_map.get("Envio de BMPO (Psicotrópicos)")
+        elif "boas práticas" in title_lower or "pop" in title_lower:
+            return class_map.get("Revisão de Manual de Boas Práticas e POPs")
         return None
 
     # 3. Cria Templates de Documentos por Segmento
@@ -335,7 +397,7 @@ async def run_seed():
                         nova_tarefa = TarefaDB(
                             documento_id=doc_id,
                             empresa_id=emp_id,
-                            prestador_id=get_prestador_id_for_title(cond.titulo),
+                            classe_servico_id=get_classe_servico_id_for_title(cond.titulo),
                             titulo=cond.titulo,
                             descricao=f"Condicionante periódica de {cond.titulo} vinculada ao documento {template.nome_documento}.",
                             tipo_id="checklist_interno",
@@ -380,7 +442,7 @@ async def run_seed():
         t_extra = TarefaDB(
             documento_id=None,
             empresa_id=emp_id,
-            prestador_id=get_prestador_id_for_title(f"Checklist de Auditoria Interna - {emp['fantasia']}"),
+            classe_servico_id=get_classe_servico_id_for_title(f"Checklist de Auditoria Interna - {emp['fantasia']}"),
             titulo=f"Checklist de Auditoria Interna - {emp['fantasia']}",
             descricao=f"Auditoria interna geral e verificação semanal de compliance de rotina.",
             tipo_id="checklist_interno",
