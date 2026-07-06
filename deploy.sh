@@ -2,7 +2,7 @@
 
 # Script de Versionamento, Sincronização e Deploy Automatizado
 # Configurações do ambiente
-SERVER_IP="2.25.170.196"
+SERVER_IP="187.77.238.27"
 SERVER_USER="root"
 SERVER_DEST_DIR="/app/regulatorio_checklist"
 REPO_URL="git@github.com:SrClauss/regulatorio_checklist.git"

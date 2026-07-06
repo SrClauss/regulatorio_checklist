@@ -32,7 +32,7 @@ async function typeSecure(page, selector, text) {
   const page = await browser.newPage();
   await page.setViewport({ width: 1280, height: 800 });
 
-  const targetUrl = 'http://2.25.170.196/';
+  const targetUrl = 'http://187.77.238.27/';
 
   try {
     // ----------------------------------------------------

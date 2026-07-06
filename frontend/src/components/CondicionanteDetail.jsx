@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { api } from '../api';
+import { api, API_BASE_URL } from '../api';
 import { 
   CheckCircle, 
   AlertCircle, 
@@ -411,7 +411,7 @@ export default function CondicionanteDetail({ taskId, user, onBack, onGoToCompan
                   <div>
                     <span style={styles.comprovanteLabel}>Arquivo Enviado</span>
                     <a 
-                      href={`http://2.25.170.196/api/tarefas/${task._id}/download`} 
+                      href={`${API_BASE_URL}/api/tarefas/${task._id}/download`} 
                       target="_blank" 
                       rel="noopener noreferrer"
                       style={styles.comprovanteLink}
