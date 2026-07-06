@@ -1,5 +1,5 @@
 # Estágio 1: Compilação do Frontend
-FROM node:20-alpine AS build
+FROM node:20-slim AS build
 
 WORKDIR /app
 
